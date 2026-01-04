@@ -27,6 +27,114 @@ This project is designed to stand on its own and can be used independently of Pi
 
 ---
 
+## Installation
+
+### Requirements
+
+- Python 3.12 or higher
+- No runtime dependencies (by design)
+
+### From Source
+
+Clone the repository and install in development mode:
+
+```bash
+git clone https://github.com/aa-parky/pipeworks_name_generation.git
+cd pipeworks_name_generation
+pip install -e .
+```
+
+For development with testing and documentation tools:
+
+```bash
+pip install -e ".[dev]"
+```
+
+### From PyPI
+
+> **Note:** Package not yet published to PyPI. Currently in Phase 1 (proof of concept).
+
+Once published, installation will be:
+
+```bash
+pip install pipeworks-name-generation
+```
+
+### Verify Installation
+
+Run the proof of concept example:
+
+```bash
+python examples/minimal_proof_of_concept.py
+```
+
+---
+
+## Quick Start
+
+```python
+from pipeworks_name_generation import NameGenerator
+
+# Create a generator
+gen = NameGenerator(pattern="simple")
+
+# Generate a name deterministically
+name = gen.generate(seed=42)
+print(name)  # "Kawyn"
+
+# Same seed = same name (always!)
+assert gen.generate(seed=42) == name
+
+# Generate multiple unique names
+names = gen.generate_batch(count=10, base_seed=1000, unique=True)
+print(names)
+# ['Borkragmar', 'Kragso', 'Thrakrain', 'Alisra', ...]
+```
+
+**Key Feature:** Determinism is guaranteed. The same seed will always produce the same name, making this ideal for games where entity IDs need consistent names across sessions.
+
+---
+
+## Documentation
+
+Full documentation is available and includes:
+
+- **Installation Guide** - Setup instructions
+- **Quick Start** - Get started in 5 minutes
+- **User Guide** - Comprehensive usage patterns and examples
+- **API Reference** - Complete API documentation
+- **Development Guide** - Contributing and development setup
+
+### Building Documentation Locally
+
+To build and view the documentation on your machine:
+
+```bash
+# Install documentation dependencies
+pip install -e ".[docs]"
+
+# Build the HTML documentation
+cd docs
+make html
+
+# View the documentation
+open build/html/index.html  # macOS
+xdg-open build/html/index.html  # Linux
+start build/html/index.html  # Windows
+```
+
+To clean and rebuild:
+
+```bash
+make clean && make html
+```
+
+### Online Documentation
+
+> **Coming Soon:** Documentation will be automatically hosted on ReadTheDocs when the repository is public.
+
+---
+
 ## Non-Goals
 
 This project deliberately does **not**:

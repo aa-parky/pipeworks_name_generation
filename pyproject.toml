@@ -31,6 +31,18 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.1",
     "mypy>=1.7",
+    "sphinx>=8.0",
+    "sphinx-rtd-theme>=3.0",
+    "sphinx-autodoc-typehints>=3.5",
+    "myst-parser>=4.0",
+]
+
+# Documentation dependencies (for ReadTheDocs)
+docs = [
+    "sphinx>=8.0",
+    "sphinx-rtd-theme>=3.0",
+    "sphinx-autodoc-typehints>=3.5",
+    "myst-parser>=4.0",
 ]
 
 [project.urls]
@@ -52,6 +64,11 @@ target-version = ["py312"]
 line-length = 100
 select = ["E", "F", "I", "N", "W"]
 ignore = ["E501"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pipeworks_name_generation*"]
+exclude = ["tests*", "docs*", "examples*", "build_tools*", "data*", "scripts*"]
 
 [tool.mypy]
 python_version = "3.12"

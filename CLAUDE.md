@@ -59,6 +59,21 @@ black pipeworks_name_generation/ tests/
 python examples/minimal_proof_of_concept.py
 ```
 
+### Documentation
+```bash
+# Build documentation locally
+cd docs
+make html
+
+# View documentation (macOS)
+open build/html/index.html
+
+# Clean and rebuild
+make clean && make html
+
+# The docs are also built automatically on ReadTheDocs when pushed to GitHub
+```
+
 ## Architecture
 
 ### Current State (Phase 1 - Proof of Concept)
