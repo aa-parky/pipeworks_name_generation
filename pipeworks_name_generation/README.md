@@ -1,0 +1,1 @@
+Core runtime library responsible for deterministic, phonetic name generation.

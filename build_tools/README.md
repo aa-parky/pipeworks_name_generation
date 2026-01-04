@@ -1,0 +1,1 @@
+Offline tools for analysing source material and generating phonetic pattern data; not required at runtime.
