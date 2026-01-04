@@ -11,6 +11,7 @@ This module tests all functionality of the syllable extractor including:
 Note: These tests require pyphen to be installed (build-time dependency only).
 """
 
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -586,7 +587,7 @@ class TestErrorHandling:
             extractor.extract_syllables_from_file(bad_file)
 
     @pytest.mark.skipif(
-        __import__("sys").platform == "win32",
+        sys.platform == "win32",
         reason="Permission handling differs on Windows (uses ACLs, not Unix permissions)",
     )
     def test_extract_from_file_permission_error(self, tmp_path):
