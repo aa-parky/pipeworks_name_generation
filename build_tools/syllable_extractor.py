@@ -7,17 +7,65 @@ LibreOffice hyphenation dictionaries.
 
 Note: This is a build-time tool, not intended for runtime use in the core
 name generation system.
+
+Overview:
+---------
+The syllable extractor processes text files and extracts individual syllables
+based on language-specific hyphenation rules. It outputs two files:
+1. A syllables file containing unique syllables (one per line, sorted)
+2. A metadata file containing extraction statistics and settings
+
+Output Format:
+--------------
+Files are saved to _working/output/ by default with timestamped names:
+- YYYYMMDD_HHMMSS.syllables.txt
+- YYYYMMDD_HHMMSS.meta.txt
+
+The metadata file includes:
+- Extraction timestamp
+- Language code used
+- Syllable length constraints
+- Input file path
+- Total unique syllables extracted
+- Length distribution statistics
+- Sample syllables
+
+Usage:
+------
+    # Interactive mode
+    python -m build_tools.syllable_extractor
+
+    # Programmatic use
+    from build_tools.syllable_extractor import SyllableExtractor
+
+    extractor = SyllableExtractor('en_US', min_syllable_length=2, max_syllable_length=8)
+    syllables = extractor.extract_syllables_from_file(Path('input.txt'))
+    extractor.save_syllables(syllables, Path('output.txt'))
+
+Classes:
+--------
+SyllableExtractor: Main class for syllable extraction
+ExtractionResult: Container for extraction results and metadata
+
+Functions:
+----------
+select_language(): Interactive language selection prompt
+generate_output_filename(): Creates timestamped output filenames
+save_metadata(): Saves extraction metadata to file
+main(): CLI entry point with interactive prompts
 """
 
 import glob
 import os
 import re
 import sys
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
-from typing import Set
+from typing import Dict, List, Optional, Set
 
 try:
-    import pyphen
+    import pyphen  # type: ignore[import-untyped]
 except ImportError:
     print("Error: pyphen is not installed.")
     print("Install it with: pip install pyphen")
@@ -27,10 +75,14 @@ except ImportError:
 # On Windows, pyreadline3 provides similar functionality
 try:
     import readline
+
     READLINE_AVAILABLE = True
 except ImportError:
     READLINE_AVAILABLE = False
 
+
+# Default output directory (relative to project root)
+DEFAULT_OUTPUT_DIR = Path("_working/output")
 
 # Mapping of language names to pyphen locale codes
 # Based on pyphen's LibreOffice dictionary support
@@ -88,6 +140,145 @@ SUPPORTED_LANGUAGES = {
 }
 
 
+@dataclass
+class ExtractionResult:
+    """
+    Container for syllable extraction results and associated metadata.
+
+    This dataclass stores both the extracted syllables and all relevant
+    metadata about the extraction process for reporting and persistence.
+
+    Attributes:
+        syllables: Set of unique syllables extracted from the input text
+        language_code: Pyphen language/locale code used for hyphenation
+        min_syllable_length: Minimum syllable length constraint
+        max_syllable_length: Maximum syllable length constraint
+        input_path: Path to the input text file
+        timestamp: When the extraction was performed
+        only_hyphenated: Whether whole words were excluded
+        length_distribution: Map of syllable length to count
+        sample_syllables: Representative sample of extracted syllables
+    """
+
+    syllables: Set[str]
+    language_code: str
+    min_syllable_length: int
+    max_syllable_length: int
+    input_path: Path
+    timestamp: datetime = field(default_factory=datetime.now)
+    only_hyphenated: bool = True
+    length_distribution: Dict[int, int] = field(default_factory=dict)
+    sample_syllables: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        """Calculate derived fields after initialization."""
+        # Calculate length distribution
+        for syllable in self.syllables:
+            length = len(syllable)
+            self.length_distribution[length] = self.length_distribution.get(length, 0) + 1
+
+        # Generate sample syllables (first 15, sorted)
+        sample_size = min(15, len(self.syllables))
+        self.sample_syllables = sorted(self.syllables)[:sample_size]
+
+    def format_metadata(self) -> str:
+        """
+        Format extraction metadata as a human-readable string.
+
+        Returns:
+            Multi-line string containing all extraction metadata formatted
+            for display or file output.
+        """
+        lines = []
+        lines.append("=" * 70)
+        lines.append("SYLLABLE EXTRACTION METADATA")
+        lines.append("=" * 70)
+        lines.append(f"Extraction Date:    {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"Language Code:      {self.language_code}")
+        lines.append(
+            f"Syllable Length:    {self.min_syllable_length}-{self.max_syllable_length} characters"
+        )
+        lines.append(f"Input File:         {self.input_path}")
+        lines.append(f"Unique Syllables:   {len(self.syllables)}")
+        lines.append(f"Only Hyphenated:    {'Yes' if self.only_hyphenated else 'No'}")
+        lines.append("=" * 70)
+
+        # Length distribution
+        if self.length_distribution:
+            lines.append("\nSyllable Length Distribution:")
+            for length in sorted(self.length_distribution.keys()):
+                count = self.length_distribution[length]
+                bar = "█" * min(40, count)
+                lines.append(f"  {length:2d} chars: {count:4d} {bar}")
+
+        # Sample syllables
+        if self.sample_syllables:
+            lines.append(f"\nSample Syllables (first {len(self.sample_syllables)}):")
+            for syllable in self.sample_syllables:
+                lines.append(f"  - {syllable}")
+            if len(self.syllables) > len(self.sample_syllables):
+                lines.append(f"  ... and {len(self.syllables) - len(self.sample_syllables)} more")
+
+        lines.append("\n" + "=" * 70)
+        return "\n".join(lines)
+
+
+def generate_output_filename(output_dir: Optional[Path] = None) -> tuple[Path, Path]:
+    """
+    Generate timestamped output filenames for syllables and metadata.
+
+    Creates two output paths with the format:
+    - YYYYMMDD_HHMMSS.syllables.txt
+    - YYYYMMDD_HHMMSS.meta.txt
+
+    Args:
+        output_dir: Directory to save files. Defaults to _working/output/
+
+    Returns:
+        Tuple of (syllables_path, metadata_path)
+
+    Example:
+        >>> syllables_path, meta_path = generate_output_filename()
+        >>> print(syllables_path)
+        _working/output/20260104_153022.syllables.txt
+    """
+    if output_dir is None:
+        output_dir = DEFAULT_OUTPUT_DIR
+
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate timestamp string
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    syllables_path = output_dir / f"{timestamp}.syllables.txt"
+    metadata_path = output_dir / f"{timestamp}.meta.txt"
+
+    return syllables_path, metadata_path
+
+
+def save_metadata(result: ExtractionResult, output_path: Path) -> None:
+    """
+    Save extraction metadata to a text file.
+
+    Args:
+        result: ExtractionResult containing metadata to save
+        output_path: Path to the output metadata file
+
+    Raises:
+        IOError: If there's an error writing the file
+
+    Example:
+        >>> result = ExtractionResult(...)
+        >>> save_metadata(result, Path("output.meta.txt"))
+    """
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(result.format_metadata())
+    except Exception as e:
+        raise IOError(f"Error writing metadata file {output_path}: {e}")
+
+
 def path_completer(text, state):
     """
     Tab completion function for file paths.
@@ -108,19 +299,16 @@ def path_completer(text, state):
     # If text is empty or just a partial path, add wildcard
     if os.path.isdir(text):
         # If it's a directory, show contents
-        text = os.path.join(text, '*')
+        text = os.path.join(text, "*")
     else:
         # Otherwise, treat as partial filename
-        text += '*'
+        text += "*"
 
     # Get all matching paths
     matches = glob.glob(text)
 
     # Add trailing slash to directories for better UX
-    matches = [
-        f"{match}/" if os.path.isdir(match) else match
-        for match in matches
-    ]
+    matches = [f"{match}/" if os.path.isdir(match) else match for match in matches]
 
     # Return the state-th match
     try:
@@ -149,7 +337,7 @@ def setup_tab_completion():
     readline.parse_and_bind("tab: complete")
 
     # Set delimiters (don't break on /, -, etc. in paths)
-    readline.set_completer_delims(' \t\n')
+    readline.set_completer_delims(" \t\n")
 
 
 def input_with_completion(prompt: str) -> str:
@@ -173,10 +361,50 @@ class SyllableExtractor:
     Extracts syllables from text using pyphen hyphenation dictionaries.
 
     This class provides methods to process text files and extract individual
-    syllables based on language-specific hyphenation rules.
+    syllables based on language-specific hyphenation rules from LibreOffice's
+    dictionary collection.
+
+    The extractor works by:
+    1. Reading text input (string or file)
+    2. Tokenizing into words using regex
+    3. Applying language-specific hyphenation rules via pyphen
+    4. Splitting hyphenated words into syllables
+    5. Filtering syllables by length constraints
+    6. Returning unique syllables (case-insensitive)
+
+    Key Features:
+        - Support for 40+ languages via pyphen
+        - Configurable syllable length constraints
+        - Option to include/exclude non-hyphenated words
+        - Case-insensitive processing
+        - Unicode support for accented characters
+        - Deterministic extraction (same input = same output)
+
+    Typical Usage:
+        >>> # Basic extraction
+        >>> extractor = SyllableExtractor('en_US', min_syllable_length=2, max_syllable_length=8)
+        >>> syllables = extractor.extract_syllables_from_text("Hello wonderful world")
+        >>> print(sorted(syllables))
+        ['der', 'ful', 'hel', 'lo', 'won', 'world']
+
+        >>> # Extract from file and save
+        >>> syllables = extractor.extract_syllables_from_file(Path('input.txt'))
+        >>> extractor.save_syllables(syllables, Path('output.txt'))
+
+    Attributes:
+        dictionary: Pyphen hyphenation dictionary for the selected language
+        language_code: The pyphen language/locale code (e.g., 'en_US', 'de_DE')
+        min_syllable_length: Minimum syllable length to include in results
+        max_syllable_length: Maximum syllable length to include in results
+
+    Note:
+        This is a build-time tool. The pyphen dependency should not be used
+        at runtime in the core name generation system.
     """
 
-    def __init__(self, language_code: str, min_syllable_length: int = 1, max_syllable_length: int = 10):
+    def __init__(
+        self, language_code: str, min_syllable_length: int = 1, max_syllable_length: int = 10
+    ):
         """
         Initialize the syllable extractor with a specific language.
 
@@ -221,7 +449,7 @@ class SyllableExtractor:
             - When only_hyphenated=True, excludes words pyphen couldn't split
         """
         # Extract words using regex (alphanumeric sequences)
-        words = re.findall(r'\b[a-zA-ZÀ-ÿ]+\b', text)
+        words = re.findall(r"\b[a-zA-ZÀ-ÿ]+\b", text)
 
         syllables: Set[str] = set()
 
@@ -231,15 +459,15 @@ class SyllableExtractor:
 
             # Get hyphenated version of the word
             # pyphen.inserted() returns the word with hyphens at syllable boundaries
-            hyphenated = self.dictionary.inserted(word_lower, hyphen='-')
+            hyphenated = self.dictionary.inserted(word_lower, hyphen="-")
 
             # Check if the word was actually hyphenated
             # If no hyphens were inserted, the word couldn't be syllabified
-            if only_hyphenated and '-' not in hyphenated:
+            if only_hyphenated and "-" not in hyphenated:
                 continue
 
             # Split on hyphens to get individual syllables
-            word_syllables = hyphenated.split('-')
+            word_syllables = hyphenated.split("-")
 
             # Filter syllables by length and add to set
             for syllable in word_syllables:
@@ -266,7 +494,7 @@ class SyllableExtractor:
             raise FileNotFoundError(f"Input file not found: {input_path}")
 
         try:
-            with open(input_path, 'r', encoding='utf-8') as f:
+            with open(input_path, "r", encoding="utf-8") as f:
                 text = f.read()
         except Exception as e:
             raise IOError(f"Error reading file {input_path}: {e}")
@@ -285,7 +513,7 @@ class SyllableExtractor:
             IOError: If there's an error writing the file
         """
         try:
-            with open(output_path, 'w', encoding='utf-8') as f:
+            with open(output_path, "w", encoding="utf-8") as f:
                 for syllable in sorted(syllables):
                     f.write(f"{syllable}\n")
         except Exception as e:
@@ -325,7 +553,7 @@ def select_language() -> str:
     while True:
         selection = input("\nSelect a language: ").strip()
 
-        if selection.lower() == 'quit':
+        if selection.lower() == "quit":
             print("Exiting.")
             sys.exit(0)
 
@@ -364,16 +592,24 @@ def main():
 
     Workflow:
         1. Prompt user to select a language
-        2. Prompt for input file path
-        3. Prompt for output file path
-        4. Extract syllables and save to output file
-        5. Display summary statistics
+        2. Configure extraction parameters (min/max syllable length)
+        3. Prompt for input file path
+        4. Extract syllables from input file
+        5. Generate timestamped output filenames
+        6. Save syllables and metadata to separate files
+        7. Display summary to console
+
+    Output Files:
+        - YYYYMMDD_HHMMSS.syllables.txt: One syllable per line, sorted
+        - YYYYMMDD_HHMMSS.meta.txt: Extraction metadata and statistics
+
+    Both files are saved to _working/output/ by default.
     """
     print("\n" + "=" * 70)
     print("PYPHEN SYLLABLE EXTRACTOR")
     print("=" * 70)
     print("\nThis tool extracts syllables from text files using dictionary-based")
-    print("hyphenation rules. The output is a sorted list of unique syllables.")
+    print("hyphenation rules. Output is saved to _working/output/ by default.")
     print("=" * 70)
 
     # Step 1: Select language
@@ -433,9 +669,11 @@ def main():
     print()
 
     while True:
-        input_path_str = input_with_completion("Enter input file path (or 'quit' to exit): ").strip()
+        input_path_str = input_with_completion(
+            "Enter input file path (or 'quit' to exit): "
+        ).strip()
 
-        if input_path_str.lower() == 'quit':
+        if input_path_str.lower() == "quit":
             print("Exiting.")
             sys.exit(0)
 
@@ -453,27 +691,7 @@ def main():
 
         break
 
-    # Step 5: Get output file path
-    print()
-    if READLINE_AVAILABLE:
-        print("💡 Tip: Use TAB for path completion")
-    output_path_str = input_with_completion("Enter output file path (default: syllables.txt): ").strip()
-
-    # Expand user home directory
-    if output_path_str:
-        output_path_str = os.path.expanduser(output_path_str)
-        output_path = Path(output_path_str)
-    else:
-        output_path = Path("syllables.txt")
-
-    # Confirm overwrite if file exists
-    if output_path.exists():
-        confirm = input(f"\n⚠ Warning: {output_path} exists. Overwrite? (y/n): ").strip().lower()
-        if confirm != 'y':
-            print("Cancelled.")
-            sys.exit(0)
-
-    # Step 6: Extract syllables
+    # Step 5: Extract syllables
     print(f"\n⏳ Processing {input_path}...")
     try:
         syllables = extractor.extract_syllables_from_file(input_path)
@@ -482,50 +700,41 @@ def main():
         print(f"\nError during extraction: {e}")
         sys.exit(1)
 
+    # Step 6: Generate output filenames and create result object
+    syllables_path, metadata_path = generate_output_filename()
+
+    result = ExtractionResult(
+        syllables=syllables,
+        language_code=language_code,
+        min_syllable_length=min_len,
+        max_syllable_length=max_len,
+        input_path=input_path,
+        only_hyphenated=True,
+    )
+
     # Step 7: Save syllables
-    print(f"\n⏳ Saving syllables to {output_path}...")
+    print(f"\n⏳ Saving syllables to {syllables_path}...")
     try:
-        extractor.save_syllables(syllables, output_path)
+        extractor.save_syllables(syllables, syllables_path)
         print("✓ Syllables saved successfully")
     except Exception as e:
         print(f"\nError saving syllables: {e}")
         sys.exit(1)
 
-    # Step 8: Display summary
-    print("\n" + "=" * 70)
-    print("EXTRACTION COMPLETE")
-    print("=" * 70)
-    print(f"Language:           {language_code}")
-    print(f"Syllable length:    {min_len}-{max_len} characters")
-    print(f"Input file:         {input_path}")
-    print(f"Output file:        {output_path}")
-    print(f"Unique syllables:   {len(syllables)}")
-    print("Only hyphenated:    Yes (whole words excluded)")
-    print("=" * 70)
+    # Step 8: Save metadata
+    print(f"⏳ Saving metadata to {metadata_path}...")
+    try:
+        save_metadata(result, metadata_path)
+        print("✓ Metadata saved successfully")
+    except Exception as e:
+        print(f"\nError saving metadata: {e}")
+        sys.exit(1)
 
-    # Show syllable length distribution
-    if syllables:
-        print("\nSyllable Length Distribution:")
-        by_length = {}
-        for syll in syllables:
-            length = len(syll)
-            by_length.setdefault(length, []).append(syll)
-
-        for length in sorted(by_length.keys()):
-            count = len(by_length[length])
-            bar = "█" * min(40, count)
-            print(f"  {length:2d} chars: {count:4d} {bar}")
-
-    # Show sample syllables
-    if syllables:
-        sample_size = min(15, len(syllables))
-        sample = sorted(syllables)[:sample_size]
-        print(f"\nSample syllables (first {sample_size}):")
-        for syllable in sample:
-            print(f"  - {syllable}")
-        if len(syllables) > sample_size:
-            print(f"  ... and {len(syllables) - sample_size} more")
-
+    # Step 9: Display summary to console
+    print("\n" + result.format_metadata())
+    print(f"\n✓ Output files saved to: {DEFAULT_OUTPUT_DIR}/")
+    print(f"  - Syllables: {syllables_path.name}")
+    print(f"  - Metadata:  {metadata_path.name}")
     print("\n✓ Done!\n")
 
 

@@ -46,7 +46,7 @@ def test_batch_generation():
     for i, name in enumerate(names, 1):
         print(f"  {i:2}. {name}")
 
-    print(f"✓ Batch generation works!")
+    print("✓ Batch generation works!")
     print(f"✓ All unique: {len(names) == len(set(names))}")
 
 

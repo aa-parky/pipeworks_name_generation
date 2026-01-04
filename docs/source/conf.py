@@ -52,7 +52,10 @@ autoapi_ignore = [
 autoapi_add_toctree_entry = True
 autoapi_keep_files = False  # Clean up generated files after build
 autoapi_member_order = "bysource"
-autoapi_python_class_content = "both"  # Include both class and __init__ docstrings
+# Include both class and __init__ docstrings for complete documentation
+# Note: This causes harmless duplicate warnings for dataclass attributes
+# (a known limitation of sphinx-autoapi), but the output is correct
+autoapi_python_class_content = "both"
 
 # -- Napoleon settings for Google-style docstrings --------------------------
 napoleon_google_docstring = True
@@ -107,5 +110,16 @@ myst_enable_extensions = [
 ]
 myst_heading_anchors = 3
 
-# Suppress warnings about myst_parser
-suppress_warnings = ["myst.header"]
+# -- Warning suppression and documentation -----------------------------------
+# Suppress certain expected warnings
+suppress_warnings = [
+    "myst.header",  # MyST parser header warnings
+]
+
+# Note: The build produces 9 harmless warnings about duplicate object descriptions
+# for ExtractionResult dataclass attributes. This is a known limitation of
+# sphinx-autoapi with Python dataclasses. The documentation output is correct;
+# these warnings can be safely ignored. See:
+# https://github.com/readthedocs/sphinx-autoapi/issues/366
+
+nitpicky = False  # Set to True to enable strict type checking

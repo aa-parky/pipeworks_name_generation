@@ -6,6 +6,7 @@ programmatically and as a CLI tool.
 """
 
 from pathlib import Path
+
 from build_tools.syllable_extractor import SyllableExtractor
 
 # Example 1: Programmatic usage with filtering
@@ -15,7 +16,7 @@ print("=" * 70)
 
 # Create an extractor for English (US) with length constraints
 # min_syllable_length=2, max_syllable_length=6 filters out very short/long fragments
-extractor = SyllableExtractor('en_US', min_syllable_length=2, max_syllable_length=6)
+extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=6)
 
 # Extract syllables from sample text
 sample_text = """
@@ -28,7 +29,7 @@ an ethereal atmosphere of wonder and enchantment.
 syllables = extractor.extract_syllables_from_text(sample_text, only_hyphenated=True)
 
 print(f"\nExtracted {len(syllables)} unique syllables from sample text")
-print(f"Settings: 2-6 characters, only hyphenated words")
+print("Settings: 2-6 characters, only hyphenated words")
 print(f"First 20 syllables (sorted): {sorted(syllables)[:20]}")
 
 # Show length distribution
@@ -67,10 +68,10 @@ print("Example 3: Multi-language Support")
 print("=" * 70)
 
 languages = [
-    ('en_US', 'Hello world'),
-    ('es', 'Hola mundo'),
-    ('de_DE', 'Hallo Welt'),
-    ('fr', 'Bonjour le monde'),
+    ("en_US", "Hello world"),
+    ("es", "Hola mundo"),
+    ("de_DE", "Hallo Welt"),
+    ("fr", "Bonjour le monde"),
 ]
 
 for lang_code, text in languages:

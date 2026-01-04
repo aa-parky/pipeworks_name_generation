@@ -4,6 +4,7 @@ Start with the absolute simplest tests that validate core functionality.
 """
 
 import pytest
+
 from pipeworks_name_generation import NameGenerator
 
 

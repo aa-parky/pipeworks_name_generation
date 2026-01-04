@@ -40,12 +40,37 @@ class NameGenerator:
     # TODO: Load from pattern files in next phase
     _SIMPLE_SYLLABLES = [
         # Soft/flowing syllables
-        "ka", "la", "thin", "mar", "in", "del",
-        "so", "ra", "vyn", "tha", "len", "is",
-        "el", "an", "dor", "mir", "eth", "al",
+        "ka",
+        "la",
+        "thin",
+        "mar",
+        "in",
+        "del",
+        "so",
+        "ra",
+        "vyn",
+        "tha",
+        "len",
+        "is",
+        "el",
+        "an",
+        "dor",
+        "mir",
+        "eth",
+        "al",
         # Harder syllables
-        "grim", "thor", "ak", "bor", "din", "wyn",
-        "krag", "durn", "mok", "gor", "thrak", "zar",
+        "grim",
+        "thor",
+        "ak",
+        "bor",
+        "din",
+        "wyn",
+        "krag",
+        "durn",
+        "mok",
+        "gor",
+        "thrak",
+        "zar",
     ]
 
     def __init__(self, pattern: str) -> None:
@@ -97,7 +122,9 @@ class NameGenerator:
         # Create deterministic random generator
         # CRITICAL: Use Random(seed), not random.seed()
         # Random(seed) creates isolated RNG, avoiding global state
-        rng = random.Random(seed)
+        # nosec B311: random.Random is intentionally used for deterministic generation,
+        # not cryptographic purposes
+        rng = random.Random(seed)  # nosec B311
 
         # Decide syllable count if not specified
         if syllables is None:
@@ -150,7 +177,7 @@ class NameGenerator:
             >>> names == gen.generate_batch(count=3, base_seed=100)
             True  # Deterministic!
         """
-        names = []
+        names: list[str] = []
         seed = base_seed
         attempts = 0
         max_attempts = count * 100  # Prevent infinite loop

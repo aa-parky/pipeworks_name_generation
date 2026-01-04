@@ -1,15 +1,21 @@
 # Development dependencies
 
+bandit[toml]>=1.7.0
+black>=24.0.0
+
+# Build
+build>=1.0.0
+isort>=5.13.0
+mypy>=1.7.0
+
+# Pre-commit hooks
+pre-commit>=3.5.0
+
+# Build-time tools (syllable extraction)
+pyphen>=0.14.0
 # Testing
 pytest>=7.4.0
 pytest-cov>=4.1.0
 
 # Code quality
 ruff>=0.1.0
-mypy>=1.7.0
-
-# Build
-build>=1.0.0
-
-# Build-time tools (syllable extraction)
-pyphen>=0.14.0

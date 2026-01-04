@@ -9,4 +9,4 @@ Tools:
 - syllable_extractor: Extract syllables from text using pyphen hyphenation
 """
 
-__all__ = ['syllable_extractor']
+__all__ = ["syllable_extractor"]
