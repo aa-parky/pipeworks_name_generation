@@ -57,7 +57,7 @@ Issues = "https://github.com/aa-parky/pipeworks_name_generation/issues"
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
-addopts = "--cov=pipeworks_name_generation --cov-report=html --cov-report=term"
+addopts = "--cov=pipeworks_name_generation --cov=build_tools --cov-report=html --cov-report=term"
 
 [tool.black]
 line-length = 100

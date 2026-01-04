@@ -536,3 +536,495 @@ class TestEdgeCases:
         # May or may not extract single letters depending on pyphen behavior
         # Just verify it doesn't crash
         assert isinstance(syllables, set)
+
+
+class TestErrorHandling:
+    """Test suite for error handling scenarios."""
+
+    def test_save_syllables_io_error(self, tmp_path):
+        """Test that IOError is raised when save_syllables fails."""
+        extractor = SyllableExtractor("en_US")
+        test_syllables = {"hello", "world"}
+
+        # Create a directory where we expect a file (will cause error)
+        bad_path = tmp_path / "bad_file.txt"
+        bad_path.mkdir()
+
+        with pytest.raises(IOError, match="Error writing file"):
+            extractor.save_syllables(test_syllables, bad_path)
+
+    def test_save_metadata_io_error(self, tmp_path):
+        """Test that IOError is raised when save_metadata fails."""
+        test_syllables = {"hello", "world"}
+        test_input_path = tmp_path / "input.txt"
+        test_input_path.write_text("test", encoding="utf-8")
+
+        result = ExtractionResult(
+            syllables=test_syllables,
+            language_code="en_US",
+            min_syllable_length=2,
+            max_syllable_length=8,
+            input_path=test_input_path,
+        )
+
+        # Create a directory where we expect a file (will cause error)
+        bad_path = tmp_path / "bad_meta.txt"
+        bad_path.mkdir()
+
+        with pytest.raises(IOError, match="Error writing metadata file"):
+            save_metadata(result, bad_path)
+
+    def test_extract_from_file_io_error(self, tmp_path):
+        """Test that IOError is raised when reading file fails."""
+        extractor = SyllableExtractor("en_US")
+
+        # Create a directory (not a file) to cause read error
+        bad_file = tmp_path / "directory_not_file"
+        bad_file.mkdir()
+
+        with pytest.raises(IOError, match="Error reading file"):
+            extractor.extract_syllables_from_file(bad_file)
+
+    def test_extract_from_file_permission_error(self, tmp_path):
+        """Test handling of file permission errors."""
+        import os
+        import stat
+
+        extractor = SyllableExtractor("en_US")
+
+        # Create a file and remove read permissions (Unix-like systems only)
+        restricted_file = tmp_path / "restricted.txt"
+        restricted_file.write_text("test content", encoding="utf-8")
+
+        # Only test on Unix-like systems
+        if hasattr(os, "chmod"):
+            try:
+                # Remove all permissions
+                os.chmod(restricted_file, 0o000)
+
+                with pytest.raises(IOError):
+                    extractor.extract_syllables_from_file(restricted_file)
+            finally:
+                # Restore permissions for cleanup
+                os.chmod(restricted_file, stat.S_IRUSR | stat.S_IWUSR)
+
+
+class TestHelperFunctions:
+    """Test suite for module-level helper functions."""
+
+    def test_generate_output_filename_timestamp_format(self):
+        """Test that output filenames have correct timestamp format."""
+        syllables_path, metadata_path = generate_output_filename()
+
+        # Extract timestamp from filename
+        timestamp_part = syllables_path.stem.replace(".syllables", "")
+
+        # Should be YYYYMMDD_HHMMSS format (15 characters)
+        assert len(timestamp_part) == 15
+        assert timestamp_part[8] == "_"
+
+        # All characters except underscore should be digits
+        assert timestamp_part[:8].isdigit()  # YYYYMMDD
+        assert timestamp_part[9:].isdigit()  # HHMMSS
+
+    def test_generate_output_filename_creates_nested_dirs(self, tmp_path):
+        """Test that deeply nested directories are created."""
+        deep_path = tmp_path / "level1" / "level2" / "level3" / "level4"
+        assert not deep_path.exists()
+
+        syllables_path, metadata_path = generate_output_filename(deep_path)
+
+        # All parent directories should be created
+        assert deep_path.exists()
+        assert deep_path.is_dir()
+
+    def test_save_metadata_creates_valid_content(self, tmp_path):
+        """Test that save_metadata creates properly formatted content."""
+        test_syllables = {"alpha", "beta", "gamma", "delta"}
+        test_input_path = tmp_path / "input.txt"
+        test_input_path.write_text("test", encoding="utf-8")
+
+        result = ExtractionResult(
+            syllables=test_syllables,
+            language_code="de_DE",
+            min_syllable_length=3,
+            max_syllable_length=7,
+            input_path=test_input_path,
+            only_hyphenated=False,
+        )
+
+        metadata_path = tmp_path / "metadata.txt"
+        save_metadata(result, metadata_path)
+
+        content = metadata_path.read_text(encoding="utf-8")
+
+        # Verify all expected sections are present
+        assert "SYLLABLE EXTRACTION METADATA" in content
+        assert "de_DE" in content
+        assert "3-7 characters" in content
+        assert str(test_input_path) in content
+        assert "4" in content  # Number of syllables
+        assert "Only Hyphenated:    No" in content
+        assert "Syllable Length Distribution:" in content
+        assert "Sample Syllables" in content
+
+
+class TestExtractionResultEdgeCases:
+    """Test edge cases for ExtractionResult dataclass."""
+
+    def test_extraction_result_with_large_syllable_set(self, tmp_path):
+        """Test ExtractionResult with a large number of syllables."""
+        # Create 1000 unique syllables
+        large_syllable_set = {f"syl{i:04d}" for i in range(1000)}
+        test_path = tmp_path / "input.txt"
+        test_path.write_text("test", encoding="utf-8")
+
+        result = ExtractionResult(
+            syllables=large_syllable_set,
+            language_code="en_US",
+            min_syllable_length=1,
+            max_syllable_length=10,
+            input_path=test_path,
+        )
+
+        # Sample should be limited to 15
+        assert len(result.sample_syllables) == 15
+
+        # Total count should be correct
+        assert len(result.syllables) == 1000
+
+        # Metadata should format correctly
+        metadata = result.format_metadata()
+        assert "1000" in metadata
+
+    def test_extraction_result_length_distribution_various_lengths(self):
+        """Test length distribution with syllables of various lengths."""
+        # Create syllables of lengths 2-10 (adding digit increases length by 1)
+        test_syllables = set()
+        for length in range(1, 10):
+            for i in range(5):  # 5 syllables of each length
+                test_syllables.add("a" * length + str(i))
+
+        test_path = Path("test.txt")
+
+        result = ExtractionResult(
+            syllables=test_syllables,
+            language_code="en_US",
+            min_syllable_length=1,
+            max_syllable_length=11,
+            input_path=test_path,
+        )
+
+        # Should have distribution for lengths 2-10 (a + digit creates 2 chars minimum)
+        for length in range(2, 11):
+            assert length in result.length_distribution
+            assert result.length_distribution[length] > 0
+
+    def test_extraction_result_custom_timestamp(self, tmp_path):
+        """Test ExtractionResult with custom timestamp."""
+        from datetime import datetime
+
+        test_syllables = {"test"}
+        test_path = tmp_path / "input.txt"
+        test_path.write_text("test", encoding="utf-8")
+
+        custom_time = datetime(2025, 1, 1, 12, 0, 0)
+
+        result = ExtractionResult(
+            syllables=test_syllables,
+            language_code="en_US",
+            min_syllable_length=1,
+            max_syllable_length=10,
+            input_path=test_path,
+            timestamp=custom_time,
+        )
+
+        assert result.timestamp == custom_time
+
+        # Check it appears in formatted metadata
+        metadata = result.format_metadata()
+        assert "2025-01-01 12:00:00" in metadata
+
+    def test_format_metadata_with_long_sample_list(self, tmp_path):
+        """Test metadata formatting when sample list shows 'and X more' message."""
+        # Create 100 syllables
+        test_syllables = {f"syl{i:03d}" for i in range(100)}
+        test_path = tmp_path / "input.txt"
+        test_path.write_text("test", encoding="utf-8")
+
+        result = ExtractionResult(
+            syllables=test_syllables,
+            language_code="en_US",
+            min_syllable_length=1,
+            max_syllable_length=10,
+            input_path=test_path,
+        )
+
+        metadata = result.format_metadata()
+
+        # Should show "... and 85 more" (100 - 15 = 85)
+        assert "and 85 more" in metadata
+
+    def test_format_metadata_with_unicode_path(self, tmp_path):
+        """Test metadata formatting with unicode characters in path."""
+        test_syllables = {"test"}
+        # Create path with unicode characters
+        test_path = tmp_path / "tëst_fîlé_日本語.txt"
+        test_path.write_text("test", encoding="utf-8")
+
+        result = ExtractionResult(
+            syllables=test_syllables,
+            language_code="en_US",
+            min_syllable_length=1,
+            max_syllable_length=10,
+            input_path=test_path,
+        )
+
+        metadata = result.format_metadata()
+
+        # Should contain the unicode path
+        assert str(test_path) in metadata
+
+
+class TestModuleConstants:
+    """Test module-level constants and configuration."""
+
+    def test_default_output_dir_is_defined(self):
+        """Test that DEFAULT_OUTPUT_DIR is properly configured."""
+        assert DEFAULT_OUTPUT_DIR == Path("_working/output")
+        assert isinstance(DEFAULT_OUTPUT_DIR, Path)
+
+    def test_supported_languages_has_expected_entries(self):
+        """Test that SUPPORTED_LANGUAGES contains expected languages."""
+        # Test for common languages
+        assert "English (US)" in SUPPORTED_LANGUAGES
+        assert "English (UK)" in SUPPORTED_LANGUAGES
+        assert "German" in SUPPORTED_LANGUAGES
+        assert "French" in SUPPORTED_LANGUAGES
+        assert "Spanish" in SUPPORTED_LANGUAGES
+
+        # Test codes
+        assert SUPPORTED_LANGUAGES["English (US)"] == "en_US"
+        assert SUPPORTED_LANGUAGES["English (UK)"] == "en_GB"
+        assert SUPPORTED_LANGUAGES["German"] == "de_DE"
+
+
+class TestLanguageSupport:
+    """Test suite for multi-language support."""
+
+    def test_supported_languages_dict_is_valid(self):
+        """Test that SUPPORTED_LANGUAGES dictionary is properly structured."""
+        assert len(SUPPORTED_LANGUAGES) > 0
+
+        for name, code in SUPPORTED_LANGUAGES.items():
+            assert isinstance(name, str)
+            assert isinstance(code, str)
+            assert len(name) > 0
+            assert len(code) > 0
+
+    def test_all_supported_languages_are_valid(self):
+        """Test that all languages in SUPPORTED_LANGUAGES can be initialized."""
+        # Test a representative sample to avoid slow tests
+        sample_languages = ["en_US", "de_DE", "fr", "es", "ru_RU"]
+
+        for lang_code in sample_languages:
+            if lang_code in SUPPORTED_LANGUAGES.values():
+                extractor = SyllableExtractor(lang_code)
+                assert extractor.language_code == lang_code
+
+    def test_extract_with_different_languages(self):
+        """Test extraction works with different language dictionaries."""
+        test_cases = [
+            ("en_US", "hello beautiful world"),
+            ("de_DE", "hallo schöne welt"),
+            ("fr", "bonjour belle monde"),
+        ]
+
+        for lang_code, text in test_cases:
+            extractor = SyllableExtractor(lang_code, min_syllable_length=2, max_syllable_length=10)
+            syllables = extractor.extract_syllables_from_text(text)
+
+            # Should extract some syllables without crashing
+            assert isinstance(syllables, set)
+
+
+class TestSyllableExtractionEdgeCases:
+    """Additional edge case tests for syllable extraction."""
+
+    def test_extract_with_very_short_syllable_constraint(self):
+        """Test extraction with minimum length of 1."""
+        extractor = SyllableExtractor("en_US", min_syllable_length=1, max_syllable_length=2)
+        text = "hello world"
+
+        syllables = extractor.extract_syllables_from_text(text)
+
+        # All syllables should be 1-2 characters
+        for syll in syllables:
+            assert 1 <= len(syll) <= 2
+
+    def test_extract_with_very_long_syllable_constraint(self):
+        """Test extraction with very large maximum length."""
+        extractor = SyllableExtractor("en_US", min_syllable_length=1, max_syllable_length=100)
+        text = "extraordinarily beautiful"
+
+        syllables = extractor.extract_syllables_from_text(text)
+
+        # Should accept all syllables
+        assert len(syllables) > 0
+
+    def test_extract_from_text_with_repeated_words(self):
+        """Test that repeated words don't increase syllable count."""
+        extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=10)
+        text = "hello hello hello world world world"
+
+        syllables = extractor.extract_syllables_from_text(text)
+
+        # Should be same as "hello world" since we use a set
+        syllables_unique = extractor.extract_syllables_from_text("hello world")
+
+        assert syllables == syllables_unique
+
+    def test_extract_with_mixed_case_produces_lowercase(self):
+        """Test that all extracted syllables are lowercase."""
+        extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=10)
+        text = "HELLO WoRLD Beautiful WONDERFUL"
+
+        syllables = extractor.extract_syllables_from_text(text)
+
+        # All syllables should be lowercase
+        for syll in syllables:
+            assert syll == syll.lower()
+            assert syll.islower()
+
+    def test_extract_from_empty_file(self, tmp_path):
+        """Test extracting from an empty file."""
+        empty_file = tmp_path / "empty.txt"
+        empty_file.write_text("", encoding="utf-8")
+
+        extractor = SyllableExtractor("en_US")
+        syllables = extractor.extract_syllables_from_file(empty_file)
+
+        assert syllables == set()
+
+    def test_extract_from_whitespace_only_file(self, tmp_path):
+        """Test extracting from a file with only whitespace."""
+        whitespace_file = tmp_path / "whitespace.txt"
+        whitespace_file.write_text("   \n\n\t\t   \n   ", encoding="utf-8")
+
+        extractor = SyllableExtractor("en_US")
+        syllables = extractor.extract_syllables_from_file(whitespace_file)
+
+        assert syllables == set()
+
+    def test_extract_with_accented_characters(self):
+        """Test extraction with various accented characters."""
+        extractor = SyllableExtractor("fr", min_syllable_length=2, max_syllable_length=10)
+        text = "été café résumé naïve déjà"
+
+        syllables = extractor.extract_syllables_from_text(text)
+
+        # Should handle accented characters without crashing
+        assert isinstance(syllables, set)
+
+    def test_save_syllables_preserves_unicode(self, tmp_path):
+        """Test that saving syllables preserves unicode characters."""
+        output_file = tmp_path / "unicode_syllables.txt"
+        test_syllables = {"café", "naïve", "résumé", "日本"}
+
+        extractor = SyllableExtractor("en_US")
+        extractor.save_syllables(test_syllables, output_file)
+
+        # Read back and verify
+        content = output_file.read_text(encoding="utf-8")
+        lines = content.strip().split("\n")
+
+        assert len(lines) == len(test_syllables)
+        assert set(lines) == test_syllables
+
+
+class TestExtractionResultDataclass:
+    """Test ExtractionResult dataclass specific behavior."""
+
+    def test_extraction_result_default_values(self, tmp_path):
+        """Test that ExtractionResult uses correct default values."""
+        test_syllables = {"test"}
+        test_path = tmp_path / "input.txt"
+        test_path.write_text("test", encoding="utf-8")
+
+        # Create with minimal args
+        result = ExtractionResult(
+            syllables=test_syllables,
+            language_code="en_US",
+            min_syllable_length=2,
+            max_syllable_length=8,
+            input_path=test_path,
+        )
+
+        # Check defaults
+        assert result.only_hyphenated is True
+        assert isinstance(result.timestamp, datetime)
+        assert isinstance(result.length_distribution, dict)
+        assert isinstance(result.sample_syllables, list)
+
+    def test_extraction_result_only_hyphenated_false(self, tmp_path):
+        """Test ExtractionResult with only_hyphenated=False."""
+        test_syllables = {"test", "word", "syllable"}
+        test_path = tmp_path / "input.txt"
+        test_path.write_text("test", encoding="utf-8")
+
+        result = ExtractionResult(
+            syllables=test_syllables,
+            language_code="en_US",
+            min_syllable_length=2,
+            max_syllable_length=10,
+            input_path=test_path,
+            only_hyphenated=False,
+        )
+
+        assert result.only_hyphenated is False
+
+        # Check it appears in metadata
+        metadata = result.format_metadata()
+        assert "Only Hyphenated:    No" in metadata
+
+    def test_format_metadata_bar_chart_rendering(self, tmp_path):
+        """Test that length distribution includes bar chart visualization."""
+        # Create syllables with known distribution
+        test_syllables = {"ab", "cd", "ef"}  # All length 2
+        test_path = tmp_path / "input.txt"
+        test_path.write_text("test", encoding="utf-8")
+
+        result = ExtractionResult(
+            syllables=test_syllables,
+            language_code="en_US",
+            min_syllable_length=1,
+            max_syllable_length=10,
+            input_path=test_path,
+        )
+
+        metadata = result.format_metadata()
+
+        # Should contain bar chart with █ character
+        assert "█" in metadata
+        assert "2 chars:" in metadata
+        assert "3" in metadata  # Count of 3 syllables
+
+    def test_format_metadata_separator_lines(self, tmp_path):
+        """Test that metadata has proper separator formatting."""
+        test_syllables = {"test"}
+        test_path = tmp_path / "input.txt"
+        test_path.write_text("test", encoding="utf-8")
+
+        result = ExtractionResult(
+            syllables=test_syllables,
+            language_code="en_US",
+            min_syllable_length=1,
+            max_syllable_length=10,
+            input_path=test_path,
+        )
+
+        metadata = result.format_metadata()
+
+        # Should have separator lines
+        assert "=" * 70 in metadata
+        assert "SYLLABLE EXTRACTION METADATA" in metadata

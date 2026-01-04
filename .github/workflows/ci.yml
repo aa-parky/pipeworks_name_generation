@@ -72,7 +72,7 @@ jobs:
 
     - name: Run tests with pytest
       run: |
-        pytest -v --cov=pipeworks_name_generation --cov-report=xml --cov-report=term
+        pytest -v --cov=pipeworks_name_generation --cov=build_tools --cov-report=xml --cov-report=term
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
