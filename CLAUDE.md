@@ -93,14 +93,32 @@ python examples/minimal_proof_of_concept.py
 ### Build Tool Commands
 
 ```bash
-# Extract syllables from text (build-time tool, interactive)
+# Extract syllables from text (interactive mode)
 python -m build_tools.syllable_extractor
+
+# Extract syllables in batch mode - single file
+python -m build_tools.syllable_extractor --file input.txt --lang en_US
+
+# Extract syllables in batch mode - multiple files
+python -m build_tools.syllable_extractor --files file1.txt file2.txt file3.txt --auto
+
+# Extract syllables in batch mode - directory scan
+python -m build_tools.syllable_extractor --source ~/documents/ --pattern "*.txt" --lang en_US
+
+# Extract syllables in batch mode - recursive directory scan with auto-detection
+python -m build_tools.syllable_extractor --source ~/corpus/ --recursive --auto
+
+# Extract syllables with custom parameters
+python -m build_tools.syllable_extractor --file input.txt --lang de_DE --min 3 --max 6 --output ~/results/
 
 # Run syllable extraction example (programmatic)
 python examples/syllable_extraction_example.py
 
-# Test syllable extractor
-pytest tests/test_syllable_extractor.py -v
+# Test syllable extractor (all tests)
+pytest tests/test_syllable_extractor.py tests/test_syllable_extractor_batch.py -v
+
+# Test only batch processing
+pytest tests/test_syllable_extractor_batch.py -v
 ```
 
 ### Documentation
@@ -209,7 +227,135 @@ python -m build_tools.syllable_extractor
 # Output is automatically saved to _working/output/
 ```
 
-**Programmatic Usage:**
+**Batch Mode Usage:**
+
+The syllable extractor supports batch processing for automated workflows. Batch mode is triggered
+by providing command-line arguments (when no arguments are provided, interactive mode is used).
+
+```bash
+# Process a single file with manual language selection
+python -m build_tools.syllable_extractor --file input.txt --lang en_US
+
+# Process a single file with automatic language detection
+python -m build_tools.syllable_extractor --file input.txt --auto
+
+# Process multiple specific files
+python -m build_tools.syllable_extractor --files book1.txt book2.txt book3.txt --auto
+
+# Scan a directory for files (non-recursive)
+python -m build_tools.syllable_extractor --source ~/documents/ --pattern "*.txt" --lang en_US
+
+# Scan a directory recursively with auto-detection
+python -m build_tools.syllable_extractor --source ~/corpus/ --recursive --auto
+
+# Use custom syllable length constraints and output directory
+python -m build_tools.syllable_extractor \
+  --source ~/texts/ \
+  --pattern "*.md" \
+  --recursive \
+  --auto \
+  --min 3 \
+  --max 6 \
+  --output ~/results/
+
+# Quiet mode (suppress progress indicators)
+python -m build_tools.syllable_extractor --files *.txt --lang de_DE --quiet
+
+# Verbose mode (show detailed processing information)
+python -m build_tools.syllable_extractor --source ~/data/ --auto --verbose
+```
+
+**Batch Mode Options:**
+
+Input options (mutually exclusive):
+
+- `--file PATH` - Process a single file
+- `--files PATH [PATH ...]` - Process multiple specific files
+- `--source DIR` - Scan a directory for files (requires --pattern)
+
+Language options (mutually exclusive, required):
+
+- `--lang CODE` - Use specific language code (e.g., en_US, de_DE)
+- `--auto` - Automatically detect language from text content
+
+Directory scanning options:
+
+- `--pattern PATTERN` - File pattern for directory scanning (default: `*.txt`)
+- `--recursive` - Scan directories recursively
+
+Extraction parameters:
+
+- `--min N` - Minimum syllable length (default: 2)
+- `--max N` - Maximum syllable length (default: 8)
+- `--output DIR` - Output directory (default: `_working/output/`)
+
+Output control:
+
+- `--quiet` - Suppress progress indicators
+- `--verbose` - Show detailed processing information
+
+**Batch Mode Behavior:**
+
+- **Sequential Processing:** Files are processed one at a time in sorted order (deterministic)
+- **Error Handling:** Processing continues even if individual files fail
+- **Summary Report:** Displays statistics, successful files, and failures at the end
+- **Exit Codes:** Returns 0 if all files succeed, 1 if any failures occur
+- **Flat Output:** All output files are saved to a single directory with language codes in filenames
+
+**Programmatic Batch Usage:**
+
+```python
+from pathlib import Path
+from build_tools.syllable_extractor import (
+    discover_files,
+    process_batch,
+    process_single_file_batch,
+    BatchResult,
+    FileProcessingResult
+)
+
+# Discover files in a directory
+files = discover_files(
+    source=Path("~/documents"),
+    pattern="*.txt",
+    recursive=True
+)
+
+# Process batch
+result: BatchResult = process_batch(
+    files=files,
+    language_code="en_US",  # or "auto" for detection
+    min_len=2,
+    max_len=8,
+    output_dir=Path("_working/output"),
+    quiet=False,
+    verbose=False
+)
+
+# Check results
+print(f"Total: {result.total_files}")
+print(f"Successful: {result.successful}")
+print(f"Failed: {result.failed}")
+print(result.format_summary())
+
+# Process single file programmatically
+file_result: FileProcessingResult = process_single_file_batch(
+    input_path=Path("input.txt"),
+    language_code="auto",
+    min_len=3,
+    max_len=6,
+    output_dir=Path("output"),
+    verbose=False
+)
+
+if file_result.success:
+    print(f"Extracted {file_result.syllables_count} syllables")
+    print(f"Detected language: {file_result.language_code}")
+else:
+    print(f"Error: {file_result.error_message}")
+```
+
+**Programmatic Single-File Usage:**
 
 ```python
 from pathlib import Path
@@ -245,10 +391,20 @@ save_metadata(result, metadata_path)
 
 **Output Format:**
 
-Files are saved to `_working/output/` with timestamped names:
+Files are saved to `_working/output/` with timestamped names including language codes:
 
-- `YYYYMMDD_HHMMSS.syllables.txt` - Unique syllables (one per line, sorted, lowercase)
-- `YYYYMMDD_HHMMSS.meta.txt` - Extraction metadata and statistics
+- `YYYYMMDD_HHMMSS.syllables.LANG.txt` - Unique syllables (one per line, sorted, lowercase)
+- `YYYYMMDD_HHMMSS.meta.LANG.txt` - Extraction metadata and statistics
+
+Examples:
+
+- `20260105_143022.syllables.en_US.txt`
+- `20260105_143022.meta.en_US.txt`
+- `20260105_143045.syllables.de_DE.txt`
+- `20260105_143045.meta.de_DE.txt`
+
+The language code in filenames enables easy sorting and organization when processing
+multiple files in different languages.
 
 Metadata includes:
 
@@ -283,17 +439,46 @@ The tool supports 40+ languages via pyphen. Common examples:
 **Testing:**
 
 ```bash
-# Run syllable extractor tests (33 tests)
+# Run all syllable extractor tests (87 tests total)
+pytest tests/test_syllable_extractor.py tests/test_syllable_extractor_batch.py -v
+
+# Run only core extraction tests (33 tests)
 pytest tests/test_syllable_extractor.py -v
 
-# Test coverage includes:
-# - Initialization and configuration
-# - Syllable extraction from text and files
-# - Length constraint enforcement
-# - Output file generation
-# - Metadata formatting
-# - Edge cases and error handling
+# Run only batch processing tests (34 tests)
+pytest tests/test_syllable_extractor_batch.py -v
+
+# Run only language detection tests (20 tests)
+pytest tests/test_language_detection.py -v
 ```
+
+**Test Coverage:**
+
+Core extraction tests (`test_syllable_extractor.py`):
+
+- Initialization and configuration
+- Syllable extraction from text and files
+- Length constraint enforcement
+- Output file generation
+- Metadata formatting
+- Edge cases and error handling
+
+Batch processing tests (`test_syllable_extractor_batch.py`):
+
+- File discovery with pattern matching and recursion
+- Single file batch processing with error handling
+- Multi-file batch processing
+- Result aggregation and formatting
+- Argument parsing and validation
+- Main batch function integration
+- End-to-end workflows and determinism
+
+Language detection tests (`test_language_detection.py`):
+
+- ISO code to pyphen locale mapping
+- Auto-detection with various languages
+- Error handling and fallbacks
+- Integration with SyllableExtractor
 
 ## Design Philosophy
 

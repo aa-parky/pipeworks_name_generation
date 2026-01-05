@@ -111,9 +111,14 @@ The project includes build-time tools for analyzing and extracting phonetic patt
 The syllable extractor uses dictionary-based hyphenation to extract syllables from text files.
 This is a **build-time tool only** - not used during runtime name generation.
 
-#### Interactive CLI Usage
+The tool supports two modes:
 
-Run the interactive syllable extractor:
+- **Interactive Mode** - Guided prompts for single-file processing
+- **Batch Mode** - Automated processing of multiple files via command-line arguments
+
+#### Interactive Mode
+
+Run the interactive syllable extractor with no arguments:
 
 ```bash
 python -m build_tools.syllable_extractor
@@ -121,19 +126,86 @@ python -m build_tools.syllable_extractor
 
 The CLI will guide you through:
 
-1. Selecting a language (40+ supported via pyphen)
-2. Configuring syllable length constraints
-3. Choosing an input text file
+1. Selecting a language (40+ supported via pyphen) or auto-detection
+2. Configuring syllable length constraints (default: 2-8 characters)
+3. Choosing an input text file (with tab completion)
 4. Extracting and saving syllables with metadata
 
-Output files are saved to `_working/output/` with timestamped names:
+#### Batch Mode
 
-- `YYYYMMDD_HHMMSS.syllables.txt` - Unique syllables (one per line, sorted)
-- `YYYYMMDD_HHMMSS.meta.txt` - Extraction metadata and statistics
+Process multiple files automatically using command-line arguments:
+
+```bash
+# Process a single file with manual language selection
+python -m build_tools.syllable_extractor --file input.txt --lang en_US
+
+# Process a single file with automatic language detection
+python -m build_tools.syllable_extractor --file input.txt --auto
+
+# Process multiple specific files
+python -m build_tools.syllable_extractor --files book1.txt book2.txt book3.txt --auto
+
+# Scan a directory for files (non-recursive)
+python -m build_tools.syllable_extractor --source ~/documents/ --pattern "*.txt" --lang en_US
+
+# Scan a directory recursively with auto-detection
+python -m build_tools.syllable_extractor --source ~/corpus/ --recursive --auto
+
+# Use custom syllable length constraints and output directory
+python -m build_tools.syllable_extractor \
+  --source ~/texts/ \
+  --pattern "*.md" \
+  --recursive \
+  --auto \
+  --min 3 \
+  --max 6 \
+  --output ~/results/
+```
+
+**Batch Mode Features:**
+
+- Sequential processing with deterministic file ordering
+- Continue-on-error with comprehensive error reporting
+- Progress indicators and detailed summaries
+- Support for automatic language detection
+- Flexible input: single file, multiple files, or directory scanning
+
+**Available Options:**
+
+- `--file PATH` - Process a single file
+- `--files PATH [PATH ...]` - Process multiple specific files
+- `--source DIR` - Scan a directory for files
+- `--lang CODE` - Use specific language code (e.g., en_US, de_DE)
+- `--auto` - Automatically detect language from text
+- `--pattern PATTERN` - File pattern for directory scanning (default: `*.txt`)
+- `--recursive` - Scan directories recursively
+- `--min N` - Minimum syllable length (default: 2)
+- `--max N` - Maximum syllable length (default: 8)
+- `--output DIR` - Output directory (default: `_working/output/`)
+- `--quiet` - Suppress progress indicators
+- `--verbose` - Show detailed processing information
+
+#### Output Format
+
+Output files are saved to `_working/output/` with timestamped names including language codes:
+
+- `YYYYMMDD_HHMMSS.syllables.LANG.txt` - Unique syllables (one per line, sorted)
+- `YYYYMMDD_HHMMSS.meta.LANG.txt` - Extraction metadata and statistics
+
+Examples:
+
+- `20260105_143022.syllables.en_US.txt`
+- `20260105_143022.meta.en_US.txt`
+- `20260105_143045.syllables.de_DE.txt`
+
+The language code in filenames enables easy sorting and organization when processing
+multiple files in different languages.
 
 #### Programmatic Usage
 
 Use the syllable extractor in your own scripts:
+
+**Single-File Extraction:**
 
 ```python
 from pathlib import Path
@@ -154,6 +226,55 @@ syllables = extractor.extract_syllables_from_file(Path('input.txt'))
 extractor.save_syllables(syllables, Path('output.txt'))
 ```
 
+**Automatic Language Detection:**
+
+```python
+from build_tools.syllable_extractor import SyllableExtractor
+
+# Automatic language detection from text
+text = "Bonjour le monde, comment allez-vous?"
+syllables, stats, detected_lang = SyllableExtractor.extract_with_auto_language(text)
+print(f"Detected language: {detected_lang}")  # "fr"
+print(f"Extracted {len(syllables)} syllables")
+
+# Automatic detection from file
+syllables, stats, detected_lang = SyllableExtractor.extract_file_with_auto_language(
+    Path('german_text.txt')
+)
+print(f"Detected language: {detected_lang}")  # "de_DE"
+```
+
+**Batch Processing:**
+
+```python
+from pathlib import Path
+from build_tools.syllable_extractor import discover_files, process_batch
+
+# Discover files in a directory
+files = discover_files(
+    source=Path("~/documents"),
+    pattern="*.txt",
+    recursive=True
+)
+
+# Process batch with automatic language detection
+result = process_batch(
+    files=files,
+    language_code="auto",  # or specific code like "en_US"
+    min_len=2,
+    max_len=8,
+    output_dir=Path("_working/output"),
+    quiet=False,
+    verbose=False
+)
+
+# Check results
+print(f"Processed {result.total_files} files")
+print(f"Successful: {result.successful}")
+print(f"Failed: {result.failed}")
+print(result.format_summary())  # Detailed summary report
+```
+
 #### Supported Languages
 
 The extractor supports 40+ languages through pyphen's LibreOffice dictionaries:
@@ -165,7 +286,39 @@ print(f"{len(SUPPORTED_LANGUAGES)} languages available")
 # English (US/UK), German, French, Spanish, Russian, and many more...
 ```
 
-For a complete example, see `examples/syllable_extraction_example.py`.
+**Language Auto-Detection:**
+
+The tool includes automatic language detection (requires `langdetect`):
+
+```python
+from build_tools.syllable_extractor import (
+    detect_language_code,
+    is_detection_available,
+    list_supported_languages
+)
+
+# Check if detection is available
+if is_detection_available():
+    # Detect language from text
+    lang_code = detect_language_code("Hello world, this is a test")
+    print(lang_code)  # "en_US"
+
+    # List all supported languages with detection
+    languages = list_supported_languages()
+    print(f"{len(languages)} languages available")
+```
+
+**Key Features:**
+
+- Dictionary-based hyphenation using pyphen (LibreOffice dictionaries)
+- Support for 40+ languages
+- Automatic language detection (optional, via langdetect)
+- Configurable syllable length constraints
+- Deterministic extraction (same input = same output)
+- Unicode support for accented characters
+- Comprehensive metadata and statistics
+
+For complete examples, see `examples/syllable_extraction_example.py`.
 
 ---
 

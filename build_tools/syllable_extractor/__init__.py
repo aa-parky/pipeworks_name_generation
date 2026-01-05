@@ -7,8 +7,10 @@ dictionary-based hyphenation via pyphen's LibreOffice dictionaries.
 Main Components:
     - SyllableExtractor: Core extraction class
     - ExtractionResult: Data model for extraction results
+    - FileProcessingResult: Result for single file in batch mode
+    - BatchResult: Aggregate results for batch processing
     - SUPPORTED_LANGUAGES: Dictionary of supported language codes
-    - CLI functions: Interactive command-line interface
+    - CLI functions: Interactive and batch command-line interfaces
 
 Usage:
     # Programmatic usage
@@ -17,12 +19,30 @@ Usage:
     extractor = SyllableExtractor('en_US', min_syllable_length=2, max_syllable_length=8)
     syllables = extractor.extract_syllables_from_text("Hello world")
 
-    # CLI usage
+    # CLI usage - Interactive mode
     python -m build_tools.syllable_extractor
+
+    # CLI usage - Batch mode
+    python -m build_tools.syllable_extractor --file input.txt --lang en_US
+    python -m build_tools.syllable_extractor --source ~/docs/ --recursive --auto
+
+    # Batch processing programmatically
+    from build_tools.syllable_extractor import discover_files, process_batch
+    from pathlib import Path
+
+    files = discover_files(Path("~/documents"), pattern="*.txt", recursive=True)
+    result = process_batch(files, "en_US", min_len=2, max_len=8, output_dir=Path("output"))
 """
 
 # CLI entry point (for python -m usage)
-from .cli import main
+from .cli import (
+    discover_files,
+    main,
+    main_batch,
+    main_interactive,
+    process_batch,
+    process_single_file_batch,
+)
 
 # Core extraction functionality
 from .extractor import SyllableExtractor
@@ -48,12 +68,14 @@ from .languages import (
 )
 
 # Data models
-from .models import ExtractionResult
+from .models import BatchResult, ExtractionResult, FileProcessingResult
 
 __all__ = [
     # Core classes
     "SyllableExtractor",
     "ExtractionResult",
+    "FileProcessingResult",
+    "BatchResult",
     # Language utilities
     "SUPPORTED_LANGUAGES",
     "get_language_code",
@@ -69,8 +91,14 @@ __all__ = [
     "DEFAULT_OUTPUT_DIR",
     "generate_output_filename",
     "save_metadata",
-    # CLI
+    # CLI - Interactive and Batch
     "main",
+    "main_interactive",
+    "main_batch",
+    # Batch processing utilities
+    "discover_files",
+    "process_single_file_batch",
+    "process_batch",
 ]
 
 __version__ = "0.1.0"

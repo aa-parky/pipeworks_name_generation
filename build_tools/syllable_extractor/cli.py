@@ -1,20 +1,24 @@
 """
 Command-line interface for the syllable extractor.
 
-This module provides interactive CLI functionality for syllable extraction,
-including language selection, user input prompts, and tab completion.
+This module provides both interactive and batch processing functionality
+for syllable extraction, including language selection, user input prompts,
+tab completion, and command-line argument parsing for batch operations.
 """
 
+import argparse
 import glob
 import os
 import sys
+import time
 from pathlib import Path
+from typing import List
 
 from .extractor import SyllableExtractor
 from .file_io import DEFAULT_OUTPUT_DIR, generate_output_filename, save_metadata
 from .language_detection import is_detection_available
 from .languages import SUPPORTED_LANGUAGES
-from .models import ExtractionResult
+from .models import BatchResult, ExtractionResult, FileProcessingResult
 
 # Try to enable readline for tab completion (Unix/Mac)
 # On Windows, pyreadline3 provides similar functionality
@@ -189,9 +193,375 @@ def select_language() -> str:
         print("Error: Invalid selection. Please try again or type 'quit' to exit.")
 
 
-def main():
+def discover_files(source: Path, pattern: str = "*.txt", recursive: bool = False) -> List[Path]:
     """
-    Main entry point for the syllable extractor CLI.
+    Discover text files in a directory matching the specified pattern.
+
+    This function searches for files matching a glob pattern in the specified
+    directory, optionally recursing into subdirectories. Results are sorted
+    alphabetically for deterministic processing order.
+
+    Args:
+        source: Directory to search for files. Must be an existing directory.
+        pattern: Glob pattern for file matching (default: "*.txt").
+                Examples: "*.txt", "*.md", "data_*.csv"
+        recursive: If True, search recursively into subdirectories using rglob.
+                  If False, search only the top level (default: False).
+
+    Returns:
+        List of Path objects for matching files, sorted alphabetically.
+        Returns empty list if no files match.
+
+    Raises:
+        ValueError: If source is not a directory or doesn't exist.
+
+    Example:
+        >>> # Find all .txt files in a directory
+        >>> files = discover_files(Path("/data/texts"))
+        >>> print(f"Found {len(files)} files")
+
+        >>> # Find all .md files recursively
+        >>> files = discover_files(Path("/data"), pattern="*.md", recursive=True)
+
+        >>> # Find files with custom pattern
+        >>> files = discover_files(Path("/data"), pattern="book_*.txt")
+    """
+    if not source.exists():
+        raise ValueError(f"Source path does not exist: {source}")
+
+    if not source.is_dir():
+        raise ValueError(f"Source path is not a directory: {source}")
+
+    if recursive:
+        # Use rglob for recursive search
+        files = list(source.rglob(pattern))
+    else:
+        # Use glob for non-recursive search
+        files = list(source.glob(pattern))
+
+    # Filter to only regular files (not directories)
+    files = [f for f in files if f.is_file()]
+
+    # Sort alphabetically for deterministic processing order
+    return sorted(files)
+
+
+def process_single_file_batch(
+    input_path: Path,
+    language_code: str,
+    min_len: int,
+    max_len: int,
+    output_dir: Path,
+    verbose: bool = False,
+) -> FileProcessingResult:
+    """
+    Process a single file in batch mode with comprehensive error handling.
+
+    This function attempts to extract syllables from a single file and saves
+    the results. Unlike interactive mode, this function catches all exceptions
+    and returns a result object indicating success or failure, allowing batch
+    processing to continue even when individual files fail.
+
+    Args:
+        input_path: Path to the input text file to process
+        language_code: Language code (e.g., "en_US", "de_DE") or "auto" for
+                      automatic language detection
+        min_len: Minimum syllable length to include in results
+        max_len: Maximum syllable length to include in results
+        output_dir: Directory where output files should be saved
+        verbose: If True, print detailed progress messages (default: False)
+
+    Returns:
+        FileProcessingResult object with success status, syllables count,
+        output paths (if successful), or error message (if failed).
+
+    Note:
+        This function never raises exceptions. All errors are caught and
+        returned in the FileProcessingResult.error_message field. This
+        design allows batch processing to continue despite individual failures.
+
+    Example:
+        >>> result = process_single_file_batch(
+        ...     Path("book.txt"),
+        ...     language_code="en_US",
+        ...     min_len=2,
+        ...     max_len=8,
+        ...     output_dir=Path("output/"),
+        ...     verbose=True
+        ... )
+        >>> if result.success:
+        ...     print(f"Extracted {result.syllables_count} syllables")
+        ... else:
+        ...     print(f"Failed: {result.error_message}")
+    """
+    start_time = time.time()
+
+    try:
+        if verbose:
+            print(f"⏳ Processing {input_path.name}...")
+
+        # Extract syllables (with auto-detection if requested)
+        if language_code == "auto":
+            syllables, stats, detected_lang = SyllableExtractor.extract_file_with_auto_language(
+                input_path,
+                min_syllable_length=min_len,
+                max_syllable_length=max_len,
+                suppress_warnings=True,
+            )
+            actual_language = detected_lang
+        else:
+            extractor = SyllableExtractor(language_code, min_len, max_len)
+            syllables, stats = extractor.extract_syllables_from_file(input_path)
+            actual_language = language_code
+
+        # Generate output filenames with language code
+        syllables_path, metadata_path = generate_output_filename(
+            output_dir=output_dir, language_code=actual_language
+        )
+
+        # Save syllables (create extractor if needed for auto-detection case)
+        if language_code == "auto":
+            extractor = SyllableExtractor(actual_language, min_len, max_len)
+
+        extractor.save_syllables(syllables, syllables_path)
+
+        # Save metadata
+        result = ExtractionResult(
+            syllables=syllables,
+            language_code=actual_language,
+            min_syllable_length=min_len,
+            max_syllable_length=max_len,
+            input_path=input_path,
+            only_hyphenated=True,
+            total_words=stats["total_words"],
+            skipped_unhyphenated=stats["skipped_unhyphenated"],
+            rejected_syllables=stats["rejected_syllables"],
+            processed_words=stats["processed_words"],
+        )
+        save_metadata(result, metadata_path)
+
+        processing_time = time.time() - start_time
+
+        if verbose:
+            print(f"  ✓ Extracted {len(syllables)} syllables ({actual_language})")
+
+        return FileProcessingResult(
+            input_path=input_path,
+            success=True,
+            syllables_count=len(syllables),
+            language_code=actual_language,
+            syllables_output_path=syllables_path,
+            metadata_output_path=metadata_path,
+            processing_time=processing_time,
+        )
+
+    except Exception as e:
+        processing_time = time.time() - start_time
+
+        if verbose:
+            print(f"  ✗ Failed: {str(e)}")
+
+        return FileProcessingResult(
+            input_path=input_path,
+            success=False,
+            syllables_count=0,
+            language_code=language_code,
+            error_message=str(e),
+            processing_time=processing_time,
+        )
+
+
+def process_batch(
+    files: List[Path],
+    language_code: str,
+    min_len: int,
+    max_len: int,
+    output_dir: Path,
+    quiet: bool = False,
+    verbose: bool = False,
+) -> BatchResult:
+    """
+    Process multiple files sequentially in batch mode.
+
+    This function processes a list of files one at a time, extracting syllables
+    from each and saving results to the specified output directory. Processing
+    continues even when individual files fail, with all failures reported in
+    the final summary.
+
+    Args:
+        files: List of input file paths to process
+        language_code: Language code (e.g., "en_US") or "auto" for detection
+        min_len: Minimum syllable length to include
+        max_len: Maximum syllable length to include
+        output_dir: Output directory for all results (created if needed)
+        quiet: If True, suppress all output except errors (default: False)
+        verbose: If True, show detailed progress for each file (default: False).
+                Ignored if quiet=True.
+
+    Returns:
+        BatchResult with overall statistics and individual file results.
+
+    Example:
+        >>> files = [Path("book1.txt"), Path("book2.txt"), Path("book3.txt")]
+        >>> result = process_batch(
+        ...     files,
+        ...     language_code="auto",
+        ...     min_len=2,
+        ...     max_len=8,
+        ...     output_dir=Path("output/")
+        ... )
+        >>> print(f"Processed {result.successful}/{result.total_files} files")
+        >>> print(result.format_summary())
+
+    Note:
+        Processing is sequential (not parallel). Files are processed in the
+        order provided in the files list. This ensures predictable resource
+        usage and easier debugging, though it may be slower for large batches.
+    """
+    start_time = time.time()
+
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if not quiet:
+        print(f"\n{'='*70}")
+        print(f"BATCH PROCESSING - {len(files)} files")
+        print(f"{'='*70}")
+        print(f"Language:         {language_code}")
+        print(f"Syllable Length:  {min_len}-{max_len} characters")
+        print(f"Output Directory: {output_dir}")
+        print(f"{'='*70}\n")
+
+    results = []
+    successful = 0
+    failed = 0
+
+    for idx, file_path in enumerate(files, 1):
+        if not quiet and not verbose:
+            # Progress indicator (non-verbose mode)
+            print(f"[{idx}/{len(files)}] Processing {file_path.name}...", end=" ", flush=True)
+
+        result = process_single_file_batch(
+            file_path,
+            language_code,
+            min_len,
+            max_len,
+            output_dir,
+            verbose=verbose and not quiet,
+        )
+
+        results.append(result)
+
+        if result.success:
+            successful += 1
+            if not quiet and not verbose:
+                print("✓")
+        else:
+            failed += 1
+            if not quiet and not verbose:
+                print(f"✗ {result.error_message}")
+
+    total_time = time.time() - start_time
+
+    return BatchResult(
+        total_files=len(files),
+        successful=successful,
+        failed=failed,
+        results=results,
+        total_time=total_time,
+        output_directory=output_dir,
+    )
+
+
+def create_argument_parser() -> argparse.ArgumentParser:
+    """
+    Create and configure the argument parser for batch mode.
+
+    This function sets up the argparse parser with all command-line options
+    for batch processing mode. The parser supports mutually exclusive groups
+    for input specification and language selection.
+
+    Returns:
+        Configured ArgumentParser instance ready to parse sys.argv.
+
+    Example:
+        >>> parser = create_argument_parser()
+        >>> args = parser.parse_args(["--file", "input.txt", "--lang", "en_US"])
+        >>> print(args.file)
+        PosixPath('input.txt')
+    """
+    parser = argparse.ArgumentParser(
+        description="Syllable Extractor - Extract syllables from text using pyphen hyphenation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Interactive mode (no arguments)
+  python -m build_tools.syllable_extractor
+
+  # Single file
+  python -m build_tools.syllable_extractor --file input.txt --lang en_US
+
+  # Multiple files
+  python -m build_tools.syllable_extractor --files file1.txt file2.txt file3.txt --auto
+
+  # Directory scan (non-recursive)
+  python -m build_tools.syllable_extractor --source /data/texts/ --pattern "*.txt"
+
+  # Directory scan (recursive)
+  python -m build_tools.syllable_extractor --source /data/ --pattern "*.md" --recursive
+
+  # Custom output directory and syllable lengths
+  python -m build_tools.syllable_extractor --source /data/ --output /results/ --min 3 --max 6
+""",
+    )
+
+    # Input specification (mutually exclusive group)
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument("--file", type=Path, help="Process a single file")
+    input_group.add_argument(
+        "--files", type=Path, nargs="+", metavar="FILE", help="Process multiple files"
+    )
+    input_group.add_argument("--source", type=Path, help="Directory to scan for files")
+
+    # Language specification (mutually exclusive)
+    lang_group = parser.add_mutually_exclusive_group()
+    lang_group.add_argument("--lang", type=str, help="Language code (e.g., en_US, de_DE, fr)")
+    lang_group.add_argument(
+        "--auto",
+        action="store_true",
+        help="Automatically detect language (requires langdetect)",
+    )
+
+    # Directory scanning options
+    parser.add_argument(
+        "--pattern",
+        type=str,
+        default="*.txt",
+        help="File pattern for directory scanning (default: *.txt)",
+    )
+    parser.add_argument("--recursive", action="store_true", help="Search directories recursively")
+
+    # Extraction parameters
+    parser.add_argument(
+        "--min", type=int, default=2, metavar="N", help="Minimum syllable length (default: 2)"
+    )
+    parser.add_argument(
+        "--max", type=int, default=8, metavar="N", help="Maximum syllable length (default: 8)"
+    )
+
+    # Output options
+    parser.add_argument(
+        "--output", type=Path, help=f"Output directory (default: {DEFAULT_OUTPUT_DIR})"
+    )
+    parser.add_argument("--quiet", action="store_true", help="Suppress all output except errors")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+
+    return parser
+
+
+def main_interactive():
+    """
+    Interactive mode entry point for the syllable extractor CLI.
 
     Workflow:
         1. Prompt user to select a language (or 'auto' for automatic detection)
@@ -209,8 +579,8 @@ def main():
         - Falls back to English (en_US) if detection fails
 
     Output Files:
-        - YYYYMMDD_HHMMSS.syllables.txt: One syllable per line, sorted
-        - YYYYMMDD_HHMMSS.meta.txt: Extraction metadata and statistics
+        - YYYYMMDD_HHMMSS.syllables.LANG.txt: One syllable per line, sorted
+        - YYYYMMDD_HHMMSS.meta.LANG.txt: Extraction metadata and statistics
 
     Both files are saved to _working/output/ by default.
     """
@@ -365,3 +735,176 @@ def main():
     print(f"  - Syllables: {syllables_path.name}")
     print(f"  - Metadata:  {metadata_path.name}")
     print("\n✓ Done!\n")
+
+
+def main_batch(args: argparse.Namespace):
+    """
+    Batch mode entry point for the syllable extractor CLI.
+
+    This function processes multiple files based on command-line arguments,
+    providing progress indicators and comprehensive error reporting.
+
+    Args:
+        args: Parsed command-line arguments from argparse.Namespace containing:
+            - file: Single file path (optional)
+            - files: List of file paths (optional)
+            - source: Directory path for scanning (optional)
+            - pattern: File pattern for directory scanning (default: "*.txt")
+            - recursive: Whether to scan directories recursively
+            - lang: Manual language code (mutually exclusive with auto)
+            - auto: Use automatic language detection (mutually exclusive with lang)
+            - min: Minimum syllable length (default: 2)
+            - max: Maximum syllable length (default: 8)
+            - output: Output directory (default: _working/output/)
+            - quiet: Suppress progress indicators
+            - verbose: Show detailed processing information
+
+    Exit Codes:
+        0: All files processed successfully
+        1: One or more files failed to process
+
+    Raises:
+        SystemExit: On validation errors or processing completion
+    """
+    # Validate parameters
+    if args.min < 1:
+        print("Error: Minimum syllable length must be at least 1")
+        sys.exit(1)
+
+    if args.max < args.min:
+        print(f"Error: Maximum syllable length ({args.max}) must be >= minimum ({args.min})")
+        sys.exit(1)
+
+    # Determine language code
+    if args.auto:
+        language_code = "auto"
+    elif args.lang:
+        language_code = args.lang
+    else:
+        print("Error: Either --lang or --auto must be specified")
+        sys.exit(1)
+
+    # Collect files to process
+    files_to_process: List[Path] = []
+
+    try:
+        if args.file:
+            # Single file
+            file_path = Path(args.file).expanduser().resolve()
+            if not file_path.exists():
+                print(f"Error: File not found: {file_path}")
+                sys.exit(1)
+            if not file_path.is_file():
+                print(f"Error: Path is not a file: {file_path}")
+                sys.exit(1)
+            files_to_process.append(file_path)
+
+        elif args.files:
+            # Multiple files
+            for file_str in args.files:
+                file_path = Path(file_str).expanduser().resolve()
+                if not file_path.exists():
+                    print(f"Error: File not found: {file_path}")
+                    sys.exit(1)
+                if not file_path.is_file():
+                    print(f"Error: Path is not a file: {file_path}")
+                    sys.exit(1)
+                files_to_process.append(file_path)
+
+        elif args.source:
+            # Directory scanning
+            source_path = Path(args.source).expanduser().resolve()
+            if not source_path.exists():
+                print(f"Error: Source directory not found: {source_path}")
+                sys.exit(1)
+            if not source_path.is_dir():
+                print(f"Error: Source path is not a directory: {source_path}")
+                sys.exit(1)
+
+            files_to_process = discover_files(
+                source=source_path, pattern=args.pattern, recursive=args.recursive
+            )
+
+            if not files_to_process:
+                print(f"Error: No files matching pattern '{args.pattern}' found in {source_path}")
+                sys.exit(1)
+
+        else:
+            print("Error: No input specified. Use --file, --files, or --source")
+            sys.exit(1)
+
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    # Determine output directory
+    output_dir = Path(args.output).expanduser().resolve() if args.output else DEFAULT_OUTPUT_DIR
+
+    # Display batch configuration
+    if not args.quiet:
+        print("\n" + "=" * 70)
+        print("BATCH SYLLABLE EXTRACTION")
+        print("=" * 70)
+        print(f"Files to process:   {len(files_to_process)}")
+        print(f"Language:           {language_code}")
+        print(f"Syllable length:    {args.min}-{args.max} characters")
+        print(f"Output directory:   {output_dir}")
+        print("=" * 70 + "\n")
+
+    # Process batch
+    batch_result = process_batch(
+        files=files_to_process,
+        language_code=language_code,
+        min_len=args.min,
+        max_len=args.max,
+        output_dir=output_dir,
+        quiet=args.quiet,
+        verbose=args.verbose,
+    )
+
+    # Display summary
+    if not args.quiet:
+        print("\n" + batch_result.format_summary())
+
+    # Exit with appropriate code
+    if batch_result.failed > 0:
+        sys.exit(1)
+    else:
+        sys.exit(0)
+
+
+def main():
+    """
+    Main entry point for the syllable extractor CLI.
+
+    This function determines whether to run in interactive or batch mode
+    based on the presence of command-line arguments.
+
+    Modes:
+        - Interactive Mode: No arguments provided. Prompts user for all settings.
+        - Batch Mode: Arguments provided. Processes files based on CLI flags.
+
+    Examples:
+        Interactive mode (no arguments):
+            $ python -m build_tools.syllable_extractor
+
+        Batch mode (with arguments):
+            $ python -m build_tools.syllable_extractor --file input.txt --lang en_US
+            $ python -m build_tools.syllable_extractor --files *.txt --auto
+            $ python -m build_tools.syllable_extractor --source ~/docs/ --recursive --auto
+    """
+    # Create argument parser
+    parser = create_argument_parser()
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    # Determine mode: batch if any input argument provided, otherwise interactive
+    has_batch_args = args.file or args.files or args.source
+
+    if has_batch_args:
+        # Batch mode
+        main_batch(args)
+    else:
+        # Interactive mode
+        main_interactive()
