@@ -81,7 +81,7 @@ class ExtractionResult:
         lines.append(f"Unique Syllables:   {len(self.syllables)}")
         lines.append(f"Only Hyphenated:    {'Yes' if self.only_hyphenated else 'No'}")
         lines.append("=" * 70)
-        
+
         # Processing statistics
         lines.append("\nProcessing Statistics:")
         lines.append(f"  Total Words:        {self.total_words:,}")
