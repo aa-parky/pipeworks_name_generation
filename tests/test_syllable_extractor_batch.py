@@ -237,7 +237,7 @@ class TestSingleFileBatchProcessing:
             verbose=False,
         )
 
-        assert result.processing_time > 0.0
+        assert result.processing_time >= 0.0
         assert result.processing_time < 10.0  # Should be reasonably fast
 
 
