@@ -114,6 +114,8 @@ myst_heading_anchors = 3
 # Suppress certain expected warnings
 suppress_warnings = [
     "myst.header",  # MyST parser header warnings
+    "ref.python",  # Duplicate object descriptions (dataclass attributes)
+    "docutils",  # Inline emphasis warnings from underscores in code
 ]
 
 # Note: We've disabled "imported-members" in autoapi_options to prevent duplicate
