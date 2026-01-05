@@ -6,16 +6,17 @@ from text using pyphen's dictionary-based hyphenation.
 """
 
 import re
-import sys
 from pathlib import Path
 from typing import Dict, Set
 
+# Optional dependency - only needed at runtime, not for documentation builds
 try:
     import pyphen  # type: ignore[import-not-found, import-untyped]
+
+    PYPHEN_AVAILABLE = True
 except ImportError:
-    print("Error: pyphen is not installed.")
-    print("Install it with: pip install pyphen")
-    sys.exit(1)
+    pyphen = None  # type: ignore[assignment]
+    PYPHEN_AVAILABLE = False
 
 
 class SyllableExtractor:
@@ -76,8 +77,15 @@ class SyllableExtractor:
             max_syllable_length: Maximum syllable length to include (default: 10)
 
         Raises:
+            ImportError: If pyphen is not installed
             ValueError: If the language code is not supported by pyphen
         """
+        if not PYPHEN_AVAILABLE:
+            raise ImportError(
+                "pyphen is not installed. This is a build-time dependency.\n"
+                "Install it with: pip install pyphen"
+            )
+
         try:
             self.dictionary = pyphen.Pyphen(lang=language_code)
             self.language_code = language_code

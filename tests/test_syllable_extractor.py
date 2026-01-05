@@ -189,7 +189,7 @@ class TestSyllableExtractor:
             assert extractor.language_code == lang_code
 
             # Test basic extraction
-            syllables = extractor.extract_syllables_from_text("hello world")
+            syllables, _ = extractor.extract_syllables_from_text("hello world")
             assert isinstance(syllables, set)
 
 
