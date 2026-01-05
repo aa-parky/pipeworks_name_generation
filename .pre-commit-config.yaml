@@ -3,6 +3,9 @@
 # Run manually: pre-commit run --all-files
 # Update hooks: pre-commit autoupdate
 
+# Global exclusions (apply to all hooks)
+exclude: ^data/normalized/
+
 repos:
   # General file formatting and checks
 - repo: https://github.com/pre-commit/pre-commit-hooks

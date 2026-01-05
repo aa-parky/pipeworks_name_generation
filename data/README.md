@@ -1,1 +1,0 @@
-Serialized phonetic and syllabic pattern data consumed by the runtime generator.
