@@ -53,7 +53,7 @@ class TestSyllableExtractor:
         extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=8)
         text = "hello world beautiful wonderful"
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # Check that we got some syllables back
         assert isinstance(syllables, set)
@@ -72,7 +72,7 @@ class TestSyllableExtractor:
         extractor = SyllableExtractor("en_US", min_syllable_length=3, max_syllable_length=10)
         text = "I am a big dog"  # "I" and "a" are single letters
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # No syllables should be shorter than 3 characters
         for syll in syllables:
@@ -83,7 +83,7 @@ class TestSyllableExtractor:
         extractor = SyllableExtractor("en_US", min_syllable_length=1, max_syllable_length=3)
         text = "extraordinarily beautiful"  # Long words with long syllables
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # No syllables should be longer than 3 characters
         for syll in syllables:
@@ -94,8 +94,8 @@ class TestSyllableExtractor:
         extractor = SyllableExtractor("en_US", min_syllable_length=1, max_syllable_length=10)
         text = "hello a I"  # "a" and "I" likely won't be hyphenated
 
-        syllables_hyphenated = extractor.extract_syllables_from_text(text, only_hyphenated=True)
-        syllables_all = extractor.extract_syllables_from_text(text, only_hyphenated=False)
+        syllables_hyphenated, _ = extractor.extract_syllables_from_text(text, only_hyphenated=True)
+        syllables_all, _ = extractor.extract_syllables_from_text(text, only_hyphenated=False)
 
         # With only_hyphenated=False, we should get more or equal syllables
         assert len(syllables_all) >= len(syllables_hyphenated)
@@ -103,7 +103,7 @@ class TestSyllableExtractor:
     def test_extract_syllables_from_empty_text(self):
         """Test extracting syllables from empty text returns empty set."""
         extractor = SyllableExtractor("en_US")
-        syllables = extractor.extract_syllables_from_text("")
+        syllables, _ = extractor.extract_syllables_from_text("")
         assert syllables == set()
 
     def test_extract_syllables_removes_punctuation(self):
@@ -111,7 +111,7 @@ class TestSyllableExtractor:
         extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=10)
         text = "Hello, world! How are you? Fine."
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # No syllables should contain punctuation
         for syll in syllables:
@@ -121,9 +121,9 @@ class TestSyllableExtractor:
         """Test that extraction is case-insensitive."""
         extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=10)
 
-        syllables_lower = extractor.extract_syllables_from_text("hello world")
-        syllables_upper = extractor.extract_syllables_from_text("HELLO WORLD")
-        syllables_mixed = extractor.extract_syllables_from_text("HeLLo WoRLd")
+        syllables_lower, _ = extractor.extract_syllables_from_text("hello world")
+        syllables_upper, _ = extractor.extract_syllables_from_text("HELLO WORLD")
+        syllables_mixed, _ = extractor.extract_syllables_from_text("HeLLo WoRLd")
 
         # All three should produce identical results
         assert syllables_lower == syllables_upper == syllables_mixed
@@ -135,7 +135,7 @@ class TestSyllableExtractor:
         test_file.write_text("hello beautiful wonderful world", encoding="utf-8")
 
         extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=8)
-        syllables = extractor.extract_syllables_from_file(test_file)
+        syllables, _ = extractor.extract_syllables_from_file(test_file)
 
         assert isinstance(syllables, set)
         assert len(syllables) > 0
@@ -417,7 +417,7 @@ class TestIntegration:
         extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=8)
 
         # Step 3: Extract syllables
-        syllables = extractor.extract_syllables_from_file(input_file)
+        syllables, stats = extractor.extract_syllables_from_file(input_file)
 
         # Step 4: Verify extraction
         assert len(syllables) > 0
@@ -441,6 +441,10 @@ class TestIntegration:
             min_syllable_length=2,
             max_syllable_length=8,
             input_path=input_file,
+            total_words=stats["total_words"],
+            skipped_unhyphenated=stats["skipped_unhyphenated"],
+            rejected_syllables=stats["rejected_syllables"],
+            processed_words=stats["processed_words"],
         )
         save_metadata(result, metadata_path)
         assert metadata_path.exists()
@@ -461,7 +465,7 @@ class TestIntegration:
         input_file.write_text("café résumé naïve", encoding="utf-8")
 
         extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=8)
-        syllables = extractor.extract_syllables_from_file(input_file)
+        syllables, _ = extractor.extract_syllables_from_file(input_file)
 
         # Should extract some syllables without crashing
         assert isinstance(syllables, set)
@@ -474,8 +478,8 @@ class TestIntegration:
         extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=8)
 
         # Extract syllables twice
-        syllables1 = extractor.extract_syllables_from_file(input_file)
-        syllables2 = extractor.extract_syllables_from_file(input_file)
+        syllables1, _ = extractor.extract_syllables_from_file(input_file)
+        syllables2, _ = extractor.extract_syllables_from_file(input_file)
 
         # Should be identical
         assert syllables1 == syllables2
@@ -487,7 +491,7 @@ class TestEdgeCases:
     def test_syllable_length_constraints_equal(self):
         """Test when min and max syllable lengths are equal."""
         extractor = SyllableExtractor("en_US", min_syllable_length=3, max_syllable_length=3)
-        syllables = extractor.extract_syllables_from_text("hello beautiful world")
+        syllables, _ = extractor.extract_syllables_from_text("hello beautiful world")
 
         # All syllables should be exactly 3 characters
         for syll in syllables:
@@ -499,7 +503,7 @@ class TestEdgeCases:
         long_text = " ".join(["hello world beautiful"] * 334)
 
         extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=8)
-        syllables = extractor.extract_syllables_from_text(long_text)
+        syllables, _ = extractor.extract_syllables_from_text(long_text)
 
         # Should still produce valid results
         assert len(syllables) > 0
@@ -511,7 +515,7 @@ class TestEdgeCases:
         extractor = SyllableExtractor("en_US", min_syllable_length=1, max_syllable_length=10)
         text = "hello123 world456 test789"
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # No syllables should contain digits
         for syll in syllables:
@@ -522,7 +526,7 @@ class TestEdgeCases:
         extractor = SyllableExtractor("en_US")
         text = "!@#$%^&*()_+-=[]{}|;':\",./<>?"
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # Should return empty set
         assert syllables == set()
@@ -532,7 +536,7 @@ class TestEdgeCases:
         extractor = SyllableExtractor("en_US", min_syllable_length=1, max_syllable_length=10)
         text = "I a b c d"
 
-        syllables = extractor.extract_syllables_from_text(text, only_hyphenated=False)
+        syllables, _ = extractor.extract_syllables_from_text(text, only_hyphenated=False)
 
         # May or may not extract single letters depending on pyphen behavior
         # Just verify it doesn't crash
@@ -845,7 +849,7 @@ class TestLanguageSupport:
 
         for lang_code, text in test_cases:
             extractor = SyllableExtractor(lang_code, min_syllable_length=2, max_syllable_length=10)
-            syllables = extractor.extract_syllables_from_text(text)
+            syllables, _ = extractor.extract_syllables_from_text(text)
 
             # Should extract some syllables without crashing
             assert isinstance(syllables, set)
@@ -859,7 +863,7 @@ class TestSyllableExtractionEdgeCases:
         extractor = SyllableExtractor("en_US", min_syllable_length=1, max_syllable_length=2)
         text = "hello world"
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # All syllables should be 1-2 characters
         for syll in syllables:
@@ -870,7 +874,7 @@ class TestSyllableExtractionEdgeCases:
         extractor = SyllableExtractor("en_US", min_syllable_length=1, max_syllable_length=100)
         text = "extraordinarily beautiful"
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # Should accept all syllables
         assert len(syllables) > 0
@@ -880,10 +884,10 @@ class TestSyllableExtractionEdgeCases:
         extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=10)
         text = "hello hello hello world world world"
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # Should be same as "hello world" since we use a set
-        syllables_unique = extractor.extract_syllables_from_text("hello world")
+        syllables_unique, _ = extractor.extract_syllables_from_text("hello world")
 
         assert syllables == syllables_unique
 
@@ -892,7 +896,7 @@ class TestSyllableExtractionEdgeCases:
         extractor = SyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=10)
         text = "HELLO WoRLD Beautiful WONDERFUL"
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # All syllables should be lowercase
         for syll in syllables:
@@ -905,7 +909,7 @@ class TestSyllableExtractionEdgeCases:
         empty_file.write_text("", encoding="utf-8")
 
         extractor = SyllableExtractor("en_US")
-        syllables = extractor.extract_syllables_from_file(empty_file)
+        syllables, _ = extractor.extract_syllables_from_file(empty_file)
 
         assert syllables == set()
 
@@ -915,7 +919,7 @@ class TestSyllableExtractionEdgeCases:
         whitespace_file.write_text("   \n\n\t\t   \n   ", encoding="utf-8")
 
         extractor = SyllableExtractor("en_US")
-        syllables = extractor.extract_syllables_from_file(whitespace_file)
+        syllables, _ = extractor.extract_syllables_from_file(whitespace_file)
 
         assert syllables == set()
 
@@ -924,7 +928,7 @@ class TestSyllableExtractionEdgeCases:
         extractor = SyllableExtractor("fr", min_syllable_length=2, max_syllable_length=10)
         text = "été café résumé naïve déjà"
 
-        syllables = extractor.extract_syllables_from_text(text)
+        syllables, _ = extractor.extract_syllables_from_text(text)
 
         # Should handle accented characters without crashing
         assert isinstance(syllables, set)

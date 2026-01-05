@@ -96,35 +96,54 @@ class SyllableExtractor:
         """
         Extract unique syllables from a block of text.
 
+        This method processes input text by tokenizing it into words, applying
+        hyphenation rules via pyphen, and extracting individual syllables that
+        meet the configured length constraints.
+
         Args:
-            text: Input text to process
+            text: Input text to process. Can contain any characters, but only
+                  alphabetic sequences (including accented characters) will be
+                  processed as words.
             only_hyphenated: If True, only include syllables from words that pyphen
                            actually hyphenated (default: True). This filters out
-                           whole words that couldn't be syllabified.
+                           whole words that couldn't be syllabified. Set to False
+                           to include all words, even if they can't be split.
 
         Returns:
-            Tuple of (syllables set, statistics dict) where statistics contains:
-                - 'total_words': Total words found in source text
-                - 'skipped_unhyphenated': Words skipped because they couldn't be hyphenated
-                - 'rejected_syllables': Syllables rejected due to length constraints
-                - 'processed_words': Words that were successfully processed
+            Tuple of (syllables, statistics) where:
+                - syllables: Set of unique lowercase syllable strings
+                - statistics: Dict with the following keys:
+                    - 'total_words': Total number of words found in source text
+                    - 'processed_words': Words that were successfully hyphenated/processed
+                    - 'skipped_unhyphenated': Words skipped (only when only_hyphenated=True)
+                    - 'rejected_syllables': Syllables rejected due to length constraints
 
         Note:
-            - Only processes words containing alphabetic characters
-            - Case-insensitive (converts to lowercase)
-            - Removes punctuation and special characters
-            - Filters syllables by min/max length constraints
+            - Only processes words containing alphabetic characters (a-z, A-Z, À-ÿ)
+            - Case-insensitive processing (all output is lowercase)
+            - Automatically removes punctuation and special characters
+            - Filters syllables by configured min/max length constraints
             - When only_hyphenated=True, excludes words pyphen couldn't split
+            - Deterministic: same input always produces same output
+            - Words are extracted using regex pattern: \\b[a-zA-ZÀ-ÿ]+\\b
+
+        Example:
+            >>> extractor = SyllableExtractor('en_US', min_syllable_length=2, max_syllable_length=8)
+            >>> syllables, stats = extractor.extract_syllables_from_text("Hello world!")
+            >>> print(sorted(syllables))
+            ['hel', 'lo', 'world']
+            >>> print(stats['total_words'])
+            2
         """
         # Extract words using regex (alphanumeric sequences)
         words = re.findall(r"\b[a-zA-ZÀ-ÿ]+\b", text)
 
         syllables: Set[str] = set()
         stats = {
-            'total_words': len(words),
-            'skipped_unhyphenated': 0,
-            'rejected_syllables': 0,
-            'processed_words': 0,
+            "total_words": len(words),
+            "skipped_unhyphenated": 0,
+            "rejected_syllables": 0,
+            "processed_words": 0,
         }
 
         for word in words:
@@ -138,10 +157,10 @@ class SyllableExtractor:
             # Check if the word was actually hyphenated
             # If no hyphens were inserted, the word couldn't be syllabified
             if only_hyphenated and "-" not in hyphenated:
-                stats['skipped_unhyphenated'] += 1
+                stats["skipped_unhyphenated"] += 1
                 continue
 
-            stats['processed_words'] += 1
+            stats["processed_words"] += 1
 
             # Split on hyphens to get individual syllables
             word_syllables = hyphenated.split("-")
@@ -151,7 +170,7 @@ class SyllableExtractor:
                 if self.min_syllable_length <= len(syllable) <= self.max_syllable_length:
                     syllables.add(syllable)
                 else:
-                    stats['rejected_syllables'] += 1
+                    stats["rejected_syllables"] += 1
 
         return syllables, stats
 
@@ -159,15 +178,28 @@ class SyllableExtractor:
         """
         Extract unique syllables from a text file.
 
+        This is a convenience wrapper around extract_syllables_from_text() that
+        handles file reading with proper encoding (UTF-8) and error handling.
+
         Args:
-            input_path: Path to the input text file
+            input_path: Path to the input text file. File should be UTF-8 encoded
+                       plain text. Binary files or non-text formats will cause errors.
 
         Returns:
-            Tuple of (syllables set, statistics dict)
+            Tuple of (syllables, statistics) where:
+                - syllables: Set of unique lowercase syllable strings
+                - statistics: Dict with processing statistics (see extract_syllables_from_text)
 
         Raises:
-            FileNotFoundError: If the input file doesn't exist
-            IOError: If there's an error reading the file
+            FileNotFoundError: If the input file doesn't exist at the specified path
+            IOError: If there's an error reading the file (permissions, encoding, etc.)
+
+        Example:
+            >>> from pathlib import Path
+            >>> extractor = SyllableExtractor('en_US', min_syllable_length=2, max_syllable_length=8)
+            >>> syllables, stats = extractor.extract_syllables_from_file(Path('book.txt'))
+            >>> print(f"Extracted {len(syllables)} unique syllables from {stats['total_words']} words")
+            Extracted 1250 unique syllables from 50000 words
         """
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
@@ -184,12 +216,32 @@ class SyllableExtractor:
         """
         Save syllables to a text file (one syllable per line, sorted).
 
+        Writes syllables in alphabetical order with UTF-8 encoding, one syllable
+        per line. This format is ideal for version control and easy importing into
+        other tools.
+
         Args:
-            syllables: Set of syllables to save
-            output_path: Path to the output file
+            syllables: Set of syllables to save. Each syllable should be a string.
+                      The set will be sorted alphabetically before writing.
+            output_path: Path to the output file. Parent directories must exist.
+                        If the file exists, it will be overwritten.
 
         Raises:
-            IOError: If there's an error writing the file
+            IOError: If there's an error writing the file (permissions, disk space, etc.)
+
+        Example:
+            >>> from pathlib import Path
+            >>> extractor = SyllableExtractor('en_US')
+            >>> syllables = {'hel', 'lo', 'world'}
+            >>> extractor.save_syllables(syllables, Path('output.txt'))
+            # Creates file with content:
+            # hel
+            # lo
+            # world
+
+        Note:
+            The output file uses UTF-8 encoding with Unix-style line endings (\\n).
+            Each line contains exactly one syllable with no leading/trailing whitespace.
         """
         try:
             with open(output_path, "w", encoding="utf-8") as f:

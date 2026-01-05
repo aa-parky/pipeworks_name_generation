@@ -292,10 +292,10 @@ def main():
         max_syllable_length=max_len,
         input_path=input_path,
         only_hyphenated=True,
-        total_words=stats['total_words'],
-        skipped_unhyphenated=stats['skipped_unhyphenated'],
-        rejected_syllables=stats['rejected_syllables'],
-        processed_words=stats['processed_words'],
+        total_words=stats["total_words"],
+        skipped_unhyphenated=stats["skipped_unhyphenated"],
+        rejected_syllables=stats["rejected_syllables"],
+        processed_words=stats["processed_words"],
     )
 
     # Step 7: Save syllables
