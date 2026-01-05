@@ -29,6 +29,10 @@ class ExtractionResult:
         only_hyphenated: Whether whole words were excluded
         length_distribution: Map of syllable length to count
         sample_syllables: Representative sample of extracted syllables
+        total_words: Total words found in source text
+        skipped_unhyphenated: Words skipped because they couldn't be hyphenated
+        rejected_syllables: Syllables rejected due to length constraints
+        processed_words: Words that were successfully processed
     """
 
     syllables: Set[str]
@@ -40,6 +44,10 @@ class ExtractionResult:
     only_hyphenated: bool = True
     length_distribution: Dict[int, int] = field(default_factory=dict)
     sample_syllables: List[str] = field(default_factory=list)
+    total_words: int = 0
+    skipped_unhyphenated: int = 0
+    rejected_syllables: int = 0
+    processed_words: int = 0
 
     def __post_init__(self):
         """Calculate derived fields after initialization."""
@@ -73,6 +81,18 @@ class ExtractionResult:
         lines.append(f"Unique Syllables:   {len(self.syllables)}")
         lines.append(f"Only Hyphenated:    {'Yes' if self.only_hyphenated else 'No'}")
         lines.append("=" * 70)
+        
+        # Processing statistics
+        lines.append("\nProcessing Statistics:")
+        lines.append(f"  Total Words:        {self.total_words:,}")
+        lines.append(f"  Processed Words:    {self.processed_words:,}")
+        lines.append(f"  Skipped (unhyph):   {self.skipped_unhyphenated:,}")
+        lines.append(f"  Rejected Syllables: {self.rejected_syllables:,}")
+        if self.total_words > 0:
+            processed_pct = (self.processed_words / self.total_words) * 100
+            skipped_pct = (self.skipped_unhyphenated / self.total_words) * 100
+            lines.append(f"  Process Rate:       {processed_pct:.1f}%")
+            lines.append(f"  Skip Rate:          {skipped_pct:.1f}%")
 
         # Length distribution
         if self.length_distribution:

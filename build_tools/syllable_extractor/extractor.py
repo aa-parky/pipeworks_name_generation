@@ -8,7 +8,7 @@ from text using pyphen's dictionary-based hyphenation.
 import re
 import sys
 from pathlib import Path
-from typing import Set
+from typing import Dict, Set
 
 try:
     import pyphen  # type: ignore[import-not-found, import-untyped]
@@ -90,7 +90,9 @@ class SyllableExtractor:
                 f"Available codes: {available}"
             )
 
-    def extract_syllables_from_text(self, text: str, only_hyphenated: bool = True) -> Set[str]:
+    def extract_syllables_from_text(
+        self, text: str, only_hyphenated: bool = True
+    ) -> tuple[Set[str], Dict[str, int]]:
         """
         Extract unique syllables from a block of text.
 
@@ -101,7 +103,11 @@ class SyllableExtractor:
                            whole words that couldn't be syllabified.
 
         Returns:
-            Set of unique syllables extracted from the text
+            Tuple of (syllables set, statistics dict) where statistics contains:
+                - 'total_words': Total words found in source text
+                - 'skipped_unhyphenated': Words skipped because they couldn't be hyphenated
+                - 'rejected_syllables': Syllables rejected due to length constraints
+                - 'processed_words': Words that were successfully processed
 
         Note:
             - Only processes words containing alphabetic characters
@@ -114,6 +120,12 @@ class SyllableExtractor:
         words = re.findall(r"\b[a-zA-ZÀ-ÿ]+\b", text)
 
         syllables: Set[str] = set()
+        stats = {
+            'total_words': len(words),
+            'skipped_unhyphenated': 0,
+            'rejected_syllables': 0,
+            'processed_words': 0,
+        }
 
         for word in words:
             # Convert to lowercase for consistency
@@ -126,7 +138,10 @@ class SyllableExtractor:
             # Check if the word was actually hyphenated
             # If no hyphens were inserted, the word couldn't be syllabified
             if only_hyphenated and "-" not in hyphenated:
+                stats['skipped_unhyphenated'] += 1
                 continue
+
+            stats['processed_words'] += 1
 
             # Split on hyphens to get individual syllables
             word_syllables = hyphenated.split("-")
@@ -135,10 +150,12 @@ class SyllableExtractor:
             for syllable in word_syllables:
                 if self.min_syllable_length <= len(syllable) <= self.max_syllable_length:
                     syllables.add(syllable)
+                else:
+                    stats['rejected_syllables'] += 1
 
-        return syllables
+        return syllables, stats
 
-    def extract_syllables_from_file(self, input_path: Path) -> Set[str]:
+    def extract_syllables_from_file(self, input_path: Path) -> tuple[Set[str], Dict[str, int]]:
         """
         Extract unique syllables from a text file.
 
@@ -146,7 +163,7 @@ class SyllableExtractor:
             input_path: Path to the input text file
 
         Returns:
-            Set of unique syllables extracted from the file
+            Tuple of (syllables set, statistics dict)
 
         Raises:
             FileNotFoundError: If the input file doesn't exist

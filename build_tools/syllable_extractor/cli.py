@@ -276,7 +276,7 @@ def main():
     # Step 5: Extract syllables
     print(f"\n⏳ Processing {input_path}...")
     try:
-        syllables = extractor.extract_syllables_from_file(input_path)
+        syllables, stats = extractor.extract_syllables_from_file(input_path)
         print(f"✓ Extracted {len(syllables)} unique syllables")
     except Exception as e:
         print(f"\nError during extraction: {e}")
@@ -292,6 +292,10 @@ def main():
         max_syllable_length=max_len,
         input_path=input_path,
         only_hyphenated=True,
+        total_words=stats['total_words'],
+        skipped_unhyphenated=stats['skipped_unhyphenated'],
+        rejected_syllables=stats['rejected_syllables'],
+        processed_words=stats['processed_words'],
     )
 
     # Step 7: Save syllables
