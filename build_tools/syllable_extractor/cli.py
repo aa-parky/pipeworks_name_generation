@@ -294,7 +294,7 @@ def process_single_file_batch(
         ... else:
         ...     print(f"Failed: {result.error_message}")
     """
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     try:
         if verbose:
@@ -340,7 +340,7 @@ def process_single_file_batch(
         )
         save_metadata(result, metadata_path)
 
-        processing_time = time.time() - start_time
+        processing_time = time.perf_counter() - start_time
 
         if verbose:
             print(f"  ✓ Extracted {len(syllables)} syllables ({actual_language})")
@@ -356,7 +356,7 @@ def process_single_file_batch(
         )
 
     except Exception as e:
-        processing_time = time.time() - start_time
+        processing_time = time.perf_counter() - start_time
 
         if verbose:
             print(f"  ✗ Failed: {str(e)}")
@@ -418,7 +418,7 @@ def process_batch(
         order provided in the files list. This ensures predictable resource
         usage and easier debugging, though it may be slower for large batches.
     """
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -461,7 +461,7 @@ def process_batch(
             if not quiet and not verbose:
                 print(f"✗ {result.error_message}")
 
-    total_time = time.time() - start_time
+    total_time = time.perf_counter() - start_time
 
     return BatchResult(
         total_files=len(files),
