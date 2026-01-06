@@ -256,3 +256,60 @@ __all__ = [
 __version__ = "0.1.0"
 __author__ = "pipeworks_name_generation contributors"
 __description__ = "Deterministic phonetic feature annotation for syllables"
+
+
+# Backward compatibility imports for analysis tools (DEPRECATED)
+# These will be removed in a future version
+import warnings as _warnings
+
+
+def _deprecated_import_warning(old_path: str, new_path: str) -> None:
+    """Issue deprecation warning for moved analysis tools."""
+    _warnings.warn(
+        f"Importing from '{old_path}' is deprecated. "
+        f"Use '{new_path}' instead. "
+        "This compatibility layer will be removed in version 0.2.0.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+
+def __getattr__(name: str):
+    """Lazy import with deprecation warning for moved analysis tools."""
+    # Random sampler functions
+    if name in ("load_annotated_syllables", "sample_syllables", "save_samples"):
+        _deprecated_import_warning(
+            "build_tools.syllable_feature_annotator.random_sampler",
+            "build_tools.syllable_feature_annotator.analysis.random_sampler",
+        )
+        from build_tools.syllable_feature_annotator.analysis.random_sampler import (  # noqa: F401
+            load_annotated_syllables,
+            sample_syllables,
+            save_samples,
+        )
+
+        return locals()[name]
+
+    # Feature signatures functions
+    if name in (
+        "extract_signature",
+        "analyze_feature_signatures",
+        "format_signature_report",
+        "run_analysis",
+        "save_report",
+    ):
+        _deprecated_import_warning(
+            "build_tools.syllable_feature_annotator.feature_signatures",
+            "build_tools.syllable_feature_annotator.analysis.feature_signatures",
+        )
+        from build_tools.syllable_feature_annotator.analysis.feature_signatures import (  # noqa: F401
+            analyze_feature_signatures,
+            extract_signature,
+            format_signature_report,
+            run_analysis,
+            save_report,
+        )
+
+        return locals()[name]
+
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

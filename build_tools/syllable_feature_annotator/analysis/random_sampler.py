@@ -6,19 +6,19 @@ a random sample in JSON format.
 
 Usage:
     # Sample 100 syllables (default)
-    python -m build_tools.syllable_feature_annotator.random_sampler
+    python -m build_tools.syllable_feature_annotator.analysis.random_sampler
 
     # Sample specific number of syllables
-    python -m build_tools.syllable_feature_annotator.random_sampler --samples 50
+    python -m build_tools.syllable_feature_annotator.analysis.random_sampler --samples 50
 
     # Specify custom input/output paths
-    python -m build_tools.syllable_feature_annotator.random_sampler \
+    python -m build_tools.syllable_feature_annotator.analysis.random_sampler \
         --input data/annotated/syllables_annotated.json \
         --output _working/samples.json \
         --samples 200
 
     # Use a specific random seed for reproducibility
-    python -m build_tools.syllable_feature_annotator.random_sampler --samples 50 --seed 42
+    python -m build_tools.syllable_feature_annotator.analysis.random_sampler --samples 50 --seed 42
 """
 
 import argparse
@@ -107,24 +107,24 @@ def parse_arguments() -> argparse.Namespace:
         epilog="""
 Examples:
   # Sample 100 syllables (default)
-  python -m build_tools.syllable_feature_annotator.random_sampler
+  python -m build_tools.syllable_feature_annotator.analysis.random_sampler
 
   # Sample 50 syllables
-  python -m build_tools.syllable_feature_annotator.random_sampler --samples 50
+  python -m build_tools.syllable_feature_annotator.analysis.random_sampler --samples 50
 
   # Use custom paths
-  python -m build_tools.syllable_feature_annotator.random_sampler \\
+  python -m build_tools.syllable_feature_annotator.analysis.random_sampler \\
       --input data/annotated/syllables_annotated.json \\
       --output _working/my_samples.json \\
       --samples 200
 
   # Use a specific seed for reproducibility
-  python -m build_tools.syllable_feature_annotator.random_sampler --samples 50 --seed 42
+  python -m build_tools.syllable_feature_annotator.analysis.random_sampler --samples 50 --seed 42
         """,
     )
 
     # Get project root for default paths
-    root = Path(__file__).resolve().parent.parent.parent
+    root = Path(__file__).resolve().parent.parent.parent.parent
 
     parser.add_argument(
         "--input",

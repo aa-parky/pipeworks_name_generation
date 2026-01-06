@@ -32,7 +32,7 @@ Run specific test class::
 
 Run with coverage::
 
-    $ pytest tests/test_random_sampler.py --cov=build_tools.syllable_feature_annotator.random_sampler
+    $ pytest tests/test_random_sampler.py --cov=build_tools.syllable_feature_annotator.analysis.random_sampler
 """
 
 import json
@@ -40,7 +40,7 @@ from unittest.mock import patch
 
 import pytest
 
-from build_tools.syllable_feature_annotator.random_sampler import (
+from build_tools.syllable_feature_annotator.analysis.random_sampler import (
     load_annotated_syllables,
     main,
     parse_arguments,

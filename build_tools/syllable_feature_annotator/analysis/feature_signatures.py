@@ -24,8 +24,8 @@ from pathlib import Path
 from typing import Counter as CounterType
 from typing import Dict, List, Optional, Tuple
 
-# Calculate project root (this file is in build_tools/syllable_feature_annotator/)
-ROOT = Path(__file__).resolve().parent.parent.parent
+# Calculate project root (this file is in build_tools/syllable_feature_annotator/analysis/)
+ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 # Default paths
 DEFAULT_INPUT = ROOT / "data" / "annotated" / "syllables_annotated.json"
@@ -220,13 +220,13 @@ def parse_args() -> argparse.Namespace:
         epilog="""
 Examples:
   # Analyze with default paths
-  python -m build_tools.syllable_feature_annotator.feature_signatures
+  python -m build_tools.syllable_feature_annotator.analysis.feature_signatures
 
   # Show only top 50 signatures
-  python -m build_tools.syllable_feature_annotator.feature_signatures --limit 50
+  python -m build_tools.syllable_feature_annotator.analysis.feature_signatures --limit 50
 
   # Custom input/output paths
-  python -m build_tools.syllable_feature_annotator.feature_signatures \\
+  python -m build_tools.syllable_feature_annotator.analysis.feature_signatures \\
     --input data/annotated/syllables_annotated.json \\
     --output _working/my_analysis/
         """,
