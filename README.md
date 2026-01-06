@@ -836,6 +836,161 @@ python -m build_tools.syllable_feature_annotator \
 - Processing is fast and deterministic (same input = same output)
 - Designed to integrate seamlessly with syllable normalizer output
 
+### Feature Signature Analysis
+
+The feature signature analysis tool examines annotated syllables to identify which feature combinations
+actually exist in the data and how frequently each combination appears. This analysis helps understand
+the diversity and distribution of phonetic patterns in your syllable corpus.
+
+A "feature signature" is the set of all active (True) features for a syllable. For example, a syllable
+with only `starts_with_vowel` and `ends_with_vowel` active would have the signature:
+`('ends_with_vowel', 'starts_with_vowel')`.
+
+This analysis answers questions like:
+
+- What feature patterns are most common in natural language?
+- Are certain feature combinations rare or impossible?
+- How diverse is the feature space in the corpus?
+
+#### Running the Analysis Tool
+
+```bash
+# Analyze with default paths (uses data/annotated/syllables_annotated.json)
+python -m build_tools.syllable_feature_annotator.feature_signatures
+
+# Show only top 20 signatures
+python -m build_tools.syllable_feature_annotator.feature_signatures --limit 20
+
+# Custom input/output paths
+python -m build_tools.syllable_feature_annotator.feature_signatures \
+  --input data/annotated/syllables_annotated.json \
+  --output _working/my_analysis/
+```
+
+#### Analysis Options
+
+**Input options:**
+
+- `--input PATH` - Path to syllables_annotated.json (default: `data/annotated/syllables_annotated.json`)
+
+**Output options:**
+
+- `--output PATH` - Output directory for analysis results (default: `_working/analysis/feature_signatures/`)
+
+**Display options:**
+
+- `--limit N` - Limit number of signatures in report (default: show all)
+
+#### Report Format
+
+The tool generates timestamped plain text reports (`YYYYMMDD_HHMMSS.feature_signatures.txt`) with:
+
+```text
+================================================================================
+FEATURE SIGNATURE ANALYSIS
+================================================================================
+Generated: 2026-01-06 13:55:56
+Total syllables analyzed: 23,160
+Unique feature signatures: 361
+
+SUMMARY STATISTICS
+--------------------------------------------------------------------------------
+Most common signature: 661 syllables (2.9%)
+  Features: contains_liquid, contains_plosive, ends_with_vowel, long_vowel
+
+Feature cardinality distribution:
+  1 features: 3 unique signatures
+  2 features: 17 unique signatures
+  3 features: 54 unique signatures
+  4 features: 86 unique signatures
+  5 features: 96 unique signatures
+  6 features: 70 unique signatures
+  7 features: 30 unique signatures
+  8 features: 5 unique signatures
+
+================================================================================
+SIGNATURE RANKINGS
+--------------------------------------------------------------------------------
+Rank   Count    Pct      Features
+--------------------------------------------------------------------------------
+1      661        2.85%  [4] contains_liquid, contains_plosive, ends_with_vowel, long_vowel
+2      506        2.18%  [3] contains_plosive, ends_with_vowel, long_vowel
+...
+```
+
+The report includes:
+
+- **Header** - Generation timestamp, total syllables, unique signatures count
+- **Summary Statistics** - Most common signature and feature cardinality distribution
+- **Signature Rankings** - Detailed list of signatures with counts, percentages, and feature lists
+
+#### Analysis API Reference
+
+```python
+from pathlib import Path
+from build_tools.syllable_feature_annotator.feature_signatures import run_analysis
+
+# Run full analysis
+result = run_analysis(
+    input_path=Path("data/annotated/syllables_annotated.json"),
+    output_dir=Path("_working/analysis/feature_signatures/"),
+    limit=None  # Show all signatures
+)
+
+# Access results
+print(f"Analyzed {result['total_syllables']:,} syllables")
+print(f"Found {result['unique_signatures']:,} unique feature signatures")
+print(f"Report saved to: {result['output_path']}")
+
+# Access signature counter
+for signature, count in result['signature_counter'].most_common(10):
+    print(f"{count:4d} syllables: {', '.join(signature)}")
+```
+
+**Working with Individual Functions:**
+
+```python
+from build_tools.syllable_feature_annotator.feature_signatures import (
+    extract_signature,
+    analyze_feature_signatures,
+    format_signature_report
+)
+
+# Extract signature from a feature dict
+features = {"starts_with_vowel": True, "ends_with_vowel": True, "short_vowel": True}
+sig = extract_signature(features)
+print(sig)  # ('ends_with_vowel', 'short_vowel', 'starts_with_vowel')
+
+# Analyze signatures across records
+records = [
+    {"syllable": "ka", "features": {"ends_with_vowel": True}},
+    {"syllable": "an", "features": {"starts_with_vowel": True, "ends_with_nasal": True}}
+]
+counter = analyze_feature_signatures(records)
+print(f"Found {len(counter)} unique signatures")
+
+# Format a report
+report = format_signature_report(counter, total_syllables=len(records), limit=10)
+print(report)
+```
+
+#### Analysis Tool Features
+
+- Deterministic analysis (same input = same output)
+- Human-readable plain text reports with formatted tables
+- Timestamped output files for historical tracking
+- Feature cardinality distribution analysis
+- Configurable result limits for large datasets
+- Comprehensive statistics (counts, percentages, rankings)
+
+#### Analysis Tool Notes
+
+- This is a **build-time analysis tool** - not used during runtime name generation
+- Analyzes the output from the syllable feature annotator
+- Results help inform pattern generation and syllable selection strategies
+- Processing is fast: typically <1 second for 20,000+ syllables
+- Reports are saved to `_working/analysis/feature_signatures/` by default
+
 ---
 
 ## Documentation
