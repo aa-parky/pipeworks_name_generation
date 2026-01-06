@@ -244,13 +244,21 @@ def create_tsne_visualization(
     return fig, tsne_coords
 
 
-def save_visualization(fig: plt.Figure, output_dir: Path, dpi: int = 300) -> Tuple[Path, Path]:
+def save_visualization(
+    fig: plt.Figure,
+    output_dir: Path,
+    dpi: int = 300,
+    perplexity: int = 30,
+    random_state: int = 42,
+) -> Tuple[Path, Path]:
     """Save t-SNE visualization to file with metadata.
 
     Args:
         fig: matplotlib Figure object to save
         output_dir: Directory to save visualization in
         dpi: Resolution in dots per inch (default: 300 for publication quality)
+        perplexity: t-SNE perplexity parameter used for generation (for metadata)
+        random_state: Random seed used for generation (for metadata)
 
     Returns:
         Tuple of (visualization_path, metadata_path):
@@ -279,8 +287,10 @@ def save_visualization(fig: plt.Figure, output_dir: Path, dpi: int = 300) -> Tup
         "ALGORITHM PARAMETERS",
         "-" * 60,
         "Method: t-SNE (t-distributed Stochastic Neighbor Embedding)",
-        "Dimensions: 2D projection of 12-dimensional binary feature space",
+        f"Perplexity: {perplexity}",
+        f"Random state: {random_state}",
         "Distance metric: Hamming (optimal for binary features)",
+        "Dimensions: 2D projection of 12-dimensional binary feature space",
         "Features: 12 phonetic features (onset, internal, nucleus, coda)",
         "",
         "VISUALIZATION ENCODING",
@@ -307,6 +317,77 @@ def save_visualization(fig: plt.Figure, output_dir: Path, dpi: int = 300) -> Tup
     return viz_path, meta_path
 
 
+def _save_tsne_mapping(
+    records: List[Dict],
+    tsne_coords: np.ndarray,
+    output_dir: Path,
+    timestamp: str,
+) -> Path:
+    """Save syllable→features→coordinates mapping as JSON.
+
+    This creates a self-contained mapping file that links:
+    - Syllable text
+    - Frequency count
+    - 2D t-SNE coordinates
+    - Complete feature dictionary
+
+    Useful for:
+    - Post-hoc cluster analysis
+    - Cross-referencing visualizations
+    - Interactive exploration (future feature)
+    - Sharing visualizations with collaborators
+
+    Args:
+        records: List of annotated syllable records from input
+        tsne_coords: numpy array of t-SNE 2D coordinates (shape: n_syllables × 2)
+        output_dir: Directory to save mapping file in
+        timestamp: Timestamp string for filename (format: YYYYMMDD_HHMMSS)
+
+    Returns:
+        Path to saved mapping JSON file
+
+    Example output structure:
+        [
+            {
+                "syllable": "kran",
+                "frequency": 7,
+                "tsne_x": -2.34,
+                "tsne_y": 5.67,
+                "features": {
+                    "contains_liquid": true,
+                    "contains_plosive": true,
+                    ...
+                }
+            },
+            ...
+        ]
+
+    Notes:
+        - Coordinates are converted from numpy to native Python floats for JSON serialization
+        - Array indices preserve order from input file
+        - All 12 features are included in each record
+        - File is formatted with indent=2 for human readability
+    """
+    mapping_path = output_dir / f"{timestamp}.tsne_mapping.json"
+
+    # Build mapping: combine records with their t-SNE coordinates
+    mapping = [
+        {
+            "syllable": records[i]["syllable"],
+            "frequency": records[i]["frequency"],
+            "tsne_x": float(tsne_coords[i, 0]),  # Convert numpy float to Python float
+            "tsne_y": float(tsne_coords[i, 1]),  # Convert numpy float to Python float
+            "features": records[i]["features"],
+        }
+        for i in range(len(records))
+    ]
+
+    # Save as formatted JSON
+    mapping_path.write_text(json.dumps(mapping, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    return mapping_path
+
+
 def run_tsne_visualization(
     input_path: Path,
     output_dir: Path,
@@ -314,6 +395,7 @@ def run_tsne_visualization(
     random_state: int = 42,
     dpi: int = 300,
     verbose: bool = False,
+    save_mapping: bool = False,
 ) -> Dict:
     """Run the complete t-SNE visualization pipeline.
 
@@ -331,6 +413,7 @@ def run_tsne_visualization(
         random_state: Random seed for reproducibility (default: 42)
         dpi: Output resolution in dots per inch (default: 300)
         verbose: Print detailed progress information
+        save_mapping: Save syllable→features→coordinates mapping as JSON (default: False)
 
     Returns:
         Dictionary containing:
@@ -339,6 +422,7 @@ def run_tsne_visualization(
             - output_path: Path to saved visualization PNG
             - metadata_path: Path to saved metadata file
             - tsne_coordinates: numpy array of 2D coordinates
+            - mapping_path: Path to mapping JSON (None if save_mapping=False)
 
     Raises:
         FileNotFoundError: If input file does not exist
@@ -379,7 +463,15 @@ def run_tsne_visualization(
         print("Saving visualization...")
 
     # Save outputs
-    viz_path, meta_path = save_visualization(fig, output_dir, dpi)
+    viz_path, meta_path = save_visualization(fig, output_dir, dpi, perplexity, random_state)
+
+    # Conditionally save mapping file
+    mapping_path = None
+    if save_mapping:
+        timestamp = viz_path.stem.split(".")[0]  # Extract timestamp from viz filename
+        mapping_path = _save_tsne_mapping(records, tsne_coords, output_dir, timestamp)
+        if verbose:
+            print(f"✓ Mapping saved to: {mapping_path}")
 
     # Clean up matplotlib figure
     plt.close(fig)
@@ -390,6 +482,7 @@ def run_tsne_visualization(
         "output_path": viz_path,
         "metadata_path": meta_path,
         "tsne_coordinates": tsne_coords,
+        "mapping_path": mapping_path,
     }
 
 
@@ -462,6 +555,12 @@ Examples:
     )
 
     parser.add_argument(
+        "--save-mapping",
+        action="store_true",
+        help="Save syllable→features→coordinates mapping as JSON (default: False)",
+    )
+
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Print detailed progress information",
@@ -500,6 +599,7 @@ def main() -> None:
             random_state=args.random_state,
             dpi=args.dpi,
             verbose=args.verbose,
+            save_mapping=args.save_mapping,
         )
 
         # Display summary
@@ -507,6 +607,8 @@ def main() -> None:
         print(f"✓ Projected {result['feature_count']} features into 2D space")
         print(f"✓ Visualization saved to: {result['output_path']}")
         print(f"✓ Metadata saved to: {result['metadata_path']}")
+        if result["mapping_path"]:
+            print(f"✓ Mapping saved to: {result['mapping_path']}")
 
     except ImportError as e:
         print(f"Error: {e}")

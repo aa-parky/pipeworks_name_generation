@@ -397,9 +397,9 @@ def test_save_visualization_creates_files(tmp_path, sample_annotated_records):
 def test_save_visualization_metadata_content(tmp_path, sample_annotated_records):
     """Test that metadata file contains expected content."""
     matrix, frequencies = extract_feature_matrix(sample_annotated_records)
-    fig, coords = create_tsne_visualization(matrix, frequencies, perplexity=2)
+    fig, coords = create_tsne_visualization(matrix, frequencies, perplexity=2, random_state=42)
 
-    viz_path, meta_path = save_visualization(fig, tmp_path, dpi=300)
+    viz_path, meta_path = save_visualization(fig, tmp_path, dpi=300, perplexity=2, random_state=42)
 
     metadata_text = meta_path.read_text()
 
@@ -410,6 +410,9 @@ def test_save_visualization_metadata_content(tmp_path, sample_annotated_records)
     assert "INTERPRETATION GUIDE" in metadata_text
     assert "Resolution: 300 DPI" in metadata_text
     assert "Hamming" in metadata_text
+    # Check for parameter values
+    assert "Perplexity: 2" in metadata_text
+    assert "Random state: 42" in metadata_text
 
 
 @pytest.mark.skipif(
@@ -429,6 +432,25 @@ def test_save_visualization_creates_directory(tmp_path, sample_annotated_records
     assert nested_dir.exists()
     assert viz_path.exists()
     assert meta_path.exists()
+
+
+@pytest.mark.skipif(
+    not pytest.importorskip("sklearn", reason="scikit-learn not installed"),
+    reason="scikit-learn required",
+)
+def test_save_visualization_custom_parameters(tmp_path, sample_annotated_records):
+    """Test that custom parameter values appear in metadata."""
+    matrix, frequencies = extract_feature_matrix(sample_annotated_records)
+    # Use perplexity=3 (less than n_samples=5)
+    fig, coords = create_tsne_visualization(matrix, frequencies, perplexity=3, random_state=123)
+
+    viz_path, meta_path = save_visualization(fig, tmp_path, dpi=300, perplexity=3, random_state=123)
+
+    metadata_text = meta_path.read_text()
+
+    # Verify custom parameters logged correctly
+    assert "Perplexity: 3" in metadata_text
+    assert "Random state: 123" in metadata_text
 
 
 # ============================================================================
@@ -522,6 +544,188 @@ def test_run_tsne_visualization_missing_file(tmp_path):
 
 
 # ============================================================================
+# Optional Mapping Feature Tests
+# ============================================================================
+
+
+@pytest.mark.skipif(
+    not pytest.importorskip("sklearn", reason="scikit-learn not installed"),
+    reason="scikit-learn required",
+)
+def test_run_tsne_visualization_no_mapping_by_default(annotated_json_file, tmp_path):
+    """Test that mapping file is NOT created by default."""
+    output_dir = tmp_path / "output"
+
+    result = run_tsne_visualization(
+        input_path=annotated_json_file,
+        output_dir=output_dir,
+        perplexity=2,
+        random_state=42,
+    )
+
+    # Mapping should not be saved by default
+    assert result["mapping_path"] is None
+
+    # Verify no .json files exist
+    json_files = list(output_dir.glob("*.json"))
+    assert len(json_files) == 0
+
+
+@pytest.mark.skipif(
+    not pytest.importorskip("sklearn", reason="scikit-learn not installed"),
+    reason="scikit-learn required",
+)
+def test_run_tsne_visualization_saves_mapping_when_requested(annotated_json_file, tmp_path):
+    """Test that mapping file IS created when save_mapping=True."""
+    output_dir = tmp_path / "output"
+
+    result = run_tsne_visualization(
+        input_path=annotated_json_file,
+        output_dir=output_dir,
+        perplexity=2,
+        random_state=42,
+        save_mapping=True,
+    )
+
+    # Mapping should be saved
+    assert result["mapping_path"] is not None
+    assert result["mapping_path"].exists()
+    assert result["mapping_path"].suffix == ".json"
+
+    # Verify timestamp matches other outputs
+    viz_timestamp = result["output_path"].stem.split(".")[0]
+    mapping_timestamp = result["mapping_path"].stem.split(".")[0]
+    assert viz_timestamp == mapping_timestamp
+
+
+@pytest.mark.skipif(
+    not pytest.importorskip("sklearn", reason="scikit-learn not installed"),
+    reason="scikit-learn required",
+)
+def test_mapping_file_structure(annotated_json_file, tmp_path):
+    """Test that mapping file has correct JSON structure."""
+    output_dir = tmp_path / "output"
+
+    result = run_tsne_visualization(
+        input_path=annotated_json_file,
+        output_dir=output_dir,
+        perplexity=2,
+        random_state=42,
+        save_mapping=True,
+    )
+
+    # Load and parse mapping
+    mapping_data = json.loads(result["mapping_path"].read_text())
+
+    # Should be a list
+    assert isinstance(mapping_data, list)
+    assert len(mapping_data) == result["syllable_count"]
+
+    # Check first record structure
+    first_record = mapping_data[0]
+    assert "syllable" in first_record
+    assert "frequency" in first_record
+    assert "tsne_x" in first_record
+    assert "tsne_y" in first_record
+    assert "features" in first_record
+
+    # Verify types
+    assert isinstance(first_record["syllable"], str)
+    assert isinstance(first_record["frequency"], int)
+    assert isinstance(first_record["tsne_x"], (int, float))
+    assert isinstance(first_record["tsne_y"], (int, float))
+    assert isinstance(first_record["features"], dict)
+
+    # Verify features contain expected keys
+    assert "contains_liquid" in first_record["features"]
+    assert "starts_with_vowel" in first_record["features"]
+
+
+@pytest.mark.skipif(
+    not pytest.importorskip("sklearn", reason="scikit-learn not installed"),
+    reason="scikit-learn required",
+)
+def test_mapping_coordinates_match_result(annotated_json_file, tmp_path):
+    """Test that mapping file coordinates match returned tsne_coordinates."""
+    output_dir = tmp_path / "output"
+
+    result = run_tsne_visualization(
+        input_path=annotated_json_file,
+        output_dir=output_dir,
+        perplexity=2,
+        random_state=42,
+        save_mapping=True,
+    )
+
+    # Load mapping
+    mapping_data = json.loads(result["mapping_path"].read_text())
+
+    # Compare coordinates
+    coords = result["tsne_coordinates"]
+    for i, record in enumerate(mapping_data):
+        # Allow small floating point differences
+        assert abs(record["tsne_x"] - coords[i, 0]) < 1e-6
+        assert abs(record["tsne_y"] - coords[i, 1]) < 1e-6
+
+
+@pytest.mark.skipif(
+    not pytest.importorskip("sklearn", reason="scikit-learn not installed"),
+    reason="scikit-learn required",
+)
+def test_full_pipeline_with_mapping(annotated_json_file, tmp_path):
+    """Test complete pipeline execution with mapping file."""
+    output_dir = tmp_path / "output"
+
+    result = run_tsne_visualization(
+        input_path=annotated_json_file,
+        output_dir=output_dir,
+        perplexity=2,
+        random_state=42,
+        dpi=100,
+        verbose=False,
+        save_mapping=True,
+    )
+
+    # Verify all expected outputs exist
+    assert result["output_path"].exists()
+    assert result["metadata_path"].exists()
+    assert result["mapping_path"].exists()
+
+    # Verify all files have same timestamp
+    viz_name = result["output_path"].stem
+    meta_name = result["metadata_path"].stem
+    mapping_name = result["mapping_path"].stem
+
+    # Extract timestamps (format: YYYYMMDD_HHMMSS.*)
+    viz_ts = viz_name.split(".")[0]
+    meta_ts = meta_name.split(".")[0]
+    mapping_ts = mapping_name.split(".")[0]
+
+    assert viz_ts == meta_ts == mapping_ts
+
+
+@pytest.mark.skipif(
+    not pytest.importorskip("sklearn", reason="scikit-learn not installed"),
+    reason="scikit-learn required",
+)
+def test_verbose_output_with_mapping(annotated_json_file, tmp_path, capsys):
+    """Test that verbose mode prints mapping path when saved."""
+    output_dir = tmp_path / "output"
+
+    run_tsne_visualization(
+        input_path=annotated_json_file,
+        output_dir=output_dir,
+        perplexity=2,
+        random_state=42,
+        verbose=True,
+        save_mapping=True,
+    )
+
+    captured = capsys.readouterr()
+    assert "Mapping saved to:" in captured.out
+
+
+# ============================================================================
 # CLI Argument Parsing Tests
 # ============================================================================
 
@@ -562,6 +766,20 @@ def test_parse_args_verbose():
     with mock.patch("sys.argv", ["tsne_visualizer.py", "--verbose"]):
         args = parse_args()
         assert args.verbose is True
+
+
+def test_parse_args_save_mapping_default():
+    """Test that --save-mapping defaults to False."""
+    with mock.patch("sys.argv", ["tsne_visualizer.py"]):
+        args = parse_args()
+        assert args.save_mapping is False
+
+
+def test_parse_args_save_mapping_flag():
+    """Test that --save-mapping flag sets attribute to True."""
+    with mock.patch("sys.argv", ["tsne_visualizer.py", "--save-mapping"]):
+        args = parse_args()
+        assert args.save_mapping is True
 
 
 def test_parse_args_custom_paths():

@@ -1061,6 +1061,10 @@ python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \
 python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \
   --dpi 600
 
+# Save mapping file for post-hoc analysis
+python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \
+  --save-mapping
+
 # Verbose output
 python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer --verbose
 ```
@@ -1075,6 +1079,7 @@ python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer --verb
 
 - `--output PATH` - Output directory for visualizations (default: `_working/analysis/tsne/`)
 - `--dpi N` - Output resolution in DPI (default: 300)
+- `--save-mapping` - Save syllable→features→coordinates mapping as JSON (default: False)
 
 **Algorithm parameters:**
 
@@ -1091,18 +1096,27 @@ The visualizer generates timestamped files in the output directory:
 
 1. **`YYYYMMDD_HHMMSS.tsne_visualization.png`** - High-resolution visualization (PNG)
 2. **`YYYYMMDD_HHMMSS.tsne_metadata.txt`** - Detailed metadata and interpretation guide
+3. **`YYYYMMDD_HHMMSS.tsne_mapping.json`** - Syllable→features→coordinates mapping (optional, requires `--save-mapping`)
 
 Example output files:
 
 - `20260106_143022.tsne_visualization.png`
 - `20260106_143022.tsne_metadata.txt`
+- `20260106_143022.tsne_mapping.json` (when using `--save-mapping`)
 
 The metadata file includes:
 
-- Algorithm parameters (method, dimensions, distance metric, features)
+- Algorithm parameters (method, perplexity, random seed, dimensions, distance metric, features)
 - Visualization encoding (axis meanings, point size/color)
 - Interpretation guide (how to read the visualization)
-- Technical details (perplexity, random seed, DPI)
+- Technical details (DPI, generation timestamp)
+
+The mapping file (optional) contains:
+
+- Syllable text and frequency for each point
+- 2D t-SNE coordinates (tsne_x, tsne_y)
+- Complete feature dictionary for each syllable
+- Useful for post-hoc cluster analysis and cross-referencing visualizations
 
 #### Visualization API Reference
 
@@ -1119,7 +1133,8 @@ result = run_tsne_visualization(
     perplexity=30,
     random_state=42,
     dpi=300,
-    verbose=True
+    verbose=True,
+    save_mapping=True  # Optional: save mapping file
 )
 
 # Access results
@@ -1127,6 +1142,10 @@ print(f"Visualized {result['syllable_count']:,} syllables")
 print(f"Projected {result['feature_count']} features into 2D")
 print(f"Visualization saved to: {result['output_path']}")
 print(f"Metadata saved to: {result['metadata_path']}")
+
+# Access mapping file (if save_mapping=True)
+if result['mapping_path']:
+    print(f"Mapping saved to: {result['mapping_path']}")
 
 # Access t-SNE coordinates
 coords = result['tsne_coordinates']  # numpy array (n_syllables, 2)
@@ -1157,8 +1176,14 @@ fig, tsne_coords = create_tsne_visualization(
     random_state=42
 )
 
-# Save outputs
-viz_path, meta_path = save_visualization(fig, Path("_working/tsne/"), dpi=300)
+# Save outputs (includes parameter logging in metadata)
+viz_path, meta_path = save_visualization(
+    fig,
+    Path("_working/tsne/"),
+    dpi=300,
+    perplexity=30,
+    random_state=42
+)
 print(f"Saved to: {viz_path}")
 ```
 
