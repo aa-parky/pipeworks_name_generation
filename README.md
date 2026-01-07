@@ -1032,6 +1032,11 @@ preserving local structure. The visualization uses:
 - **Size**: Syllable frequency (larger points = more common)
 - **Color**: Syllable frequency (warmer colors = more common)
 
+**Output Formats:**
+
+- **Static PNG**: High-resolution matplotlib visualization (always generated)
+- **Interactive HTML**: Plotly-based interactive visualization with hover tooltips, zoom, pan, and export (optional)
+
 This visualization helps answer questions like:
 
 - Are there natural clusters in the feature space?
@@ -1044,25 +1049,30 @@ This visualization helps answer questions like:
 Generate a t-SNE visualization with default settings:
 
 ```bash
-# Basic usage with default paths
+# Basic usage with default paths (static PNG only)
 python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer
 
-# Custom input/output paths
+# Generate both static PNG and interactive HTML
+python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \
+  --interactive \
+  --save-mapping
+
+# Custom input/output paths with interactive visualization
 python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \
   --input data/annotated/syllables_annotated.json \
-  --output _working/analysis/tsne/
+  --output _working/analysis/tsne/ \
+  --interactive
 
-# Adjust t-SNE parameters
+# Adjust t-SNE parameters with interactive output
 python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \
   --perplexity 50 \
-  --random-state 123
+  --random-state 123 \
+  --interactive
 
-# High-resolution output
+# High-resolution output with interactive HTML
 python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \
-  --dpi 600
-
-# Save mapping file for post-hoc analysis
-python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \
+  --dpi 600 \
+  --interactive \
   --save-mapping
 
 # Verbose output
@@ -1078,8 +1088,9 @@ python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer --verb
 **Output options:**
 
 - `--output PATH` - Output directory for visualizations (default: `_working/analysis/tsne/`)
-- `--dpi N` - Output resolution in DPI (default: 300)
+- `--dpi N` - Output resolution in DPI for static PNG (default: 300)
 - `--save-mapping` - Save syllable→features→coordinates mapping as JSON (default: False)
+- `--interactive` - Generate interactive HTML visualization in addition to static PNG (requires Plotly)
 
 **Algorithm parameters:**
 
@@ -1094,22 +1105,32 @@ python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer --verb
 
 The visualizer generates timestamped files in the output directory:
 
-1. **`YYYYMMDD_HHMMSS.tsne_visualization.png`** - High-resolution visualization (PNG)
+1. **`YYYYMMDD_HHMMSS.tsne_visualization.png`** - High-resolution static visualization (PNG, always generated)
 2. **`YYYYMMDD_HHMMSS.tsne_metadata.txt`** - Detailed metadata and interpretation guide
 3. **`YYYYMMDD_HHMMSS.tsne_mapping.json`** - Syllable→features→coordinates mapping (optional, requires `--save-mapping`)
+4. **`YYYYMMDD_HHMMSS.tsne_interactive.html`** - Interactive Plotly visualization (optional, requires `--interactive`)
 
 Example output files:
 
-- `20260106_143022.tsne_visualization.png`
-- `20260106_143022.tsne_metadata.txt`
+- `20260106_143022.tsne_visualization.png` (static PNG)
+- `20260106_143022.tsne_metadata.txt` (metadata)
 - `20260106_143022.tsne_mapping.json` (when using `--save-mapping`)
+- `20260106_143022.tsne_interactive.html` (when using `--interactive`)
 
-The metadata file includes:
+**Static PNG metadata file includes:**
 
 - Algorithm parameters (method, perplexity, random seed, dimensions, distance metric, features)
 - Visualization encoding (axis meanings, point size/color)
 - Interpretation guide (how to read the visualization)
 - Technical details (DPI, generation timestamp)
+
+**Interactive HTML features:**
+
+- Hover tooltips showing syllable text, frequency, and active features
+- Interactive zoom, pan, and exploration controls
+- Export to high-resolution PNG directly from browser
+- Self-contained HTML file with embedded metadata
+- Works in any modern web browser without additional dependencies
 
 The mapping file (optional) contains:
 
@@ -1126,7 +1147,7 @@ The mapping file (optional) contains:
 from pathlib import Path
 from build_tools.syllable_feature_annotator.analysis import run_tsne_visualization
 
-# Run complete visualization pipeline
+# Run complete visualization pipeline with interactive output
 result = run_tsne_visualization(
     input_path=Path("data/annotated/syllables_annotated.json"),
     output_dir=Path("_working/analysis/tsne/"),
@@ -1134,18 +1155,23 @@ result = run_tsne_visualization(
     random_state=42,
     dpi=300,
     verbose=True,
-    save_mapping=True  # Optional: save mapping file
+    save_mapping=True,  # Optional: save mapping file
+    interactive=True    # Optional: generate interactive HTML (requires Plotly)
 )
 
 # Access results
 print(f"Visualized {result['syllable_count']:,} syllables")
 print(f"Projected {result['feature_count']} features into 2D")
-print(f"Visualization saved to: {result['output_path']}")
+print(f"Static visualization: {result['output_path']}")
 print(f"Metadata saved to: {result['metadata_path']}")
 
 # Access mapping file (if save_mapping=True)
 if result['mapping_path']:
     print(f"Mapping saved to: {result['mapping_path']}")
+
+# Access interactive HTML (if interactive=True)
+if result['interactive_path']:
+    print(f"Interactive HTML: {result['interactive_path']}")
 
 # Access t-SNE coordinates
 coords = result['tsne_coordinates']  # numpy array (n_syllables, 2)
@@ -1154,11 +1180,14 @@ coords = result['tsne_coordinates']  # numpy array (n_syllables, 2)
 **Working with Individual Functions:**
 
 ```python
+from pathlib import Path
 from build_tools.syllable_feature_annotator.analysis.tsne_visualizer import (
     load_annotated_data,
     extract_feature_matrix,
     create_tsne_visualization,
-    save_visualization
+    save_visualization,
+    create_interactive_visualization,
+    save_interactive_visualization
 )
 
 # Load data
@@ -1168,7 +1197,7 @@ records = load_annotated_data(Path("data/annotated/syllables_annotated.json"))
 feature_matrix, frequencies = extract_feature_matrix(records)
 print(f"Feature matrix shape: {feature_matrix.shape}")  # (n_syllables, 12)
 
-# Create visualization
+# Create static visualization
 fig, tsne_coords = create_tsne_visualization(
     feature_matrix,
     frequencies,
@@ -1176,7 +1205,7 @@ fig, tsne_coords = create_tsne_visualization(
     random_state=42
 )
 
-# Save outputs (includes parameter logging in metadata)
+# Save static PNG (includes parameter logging in metadata)
 viz_path, meta_path = save_visualization(
     fig,
     Path("_working/tsne/"),
@@ -1184,7 +1213,19 @@ viz_path, meta_path = save_visualization(
     perplexity=30,
     random_state=42
 )
-print(f"Saved to: {viz_path}")
+print(f"Static PNG saved to: {viz_path}")
+
+# Create interactive visualization (requires Plotly)
+interactive_fig = create_interactive_visualization(records, tsne_coords)
+
+# Save interactive HTML
+html_path = save_interactive_visualization(
+    interactive_fig,
+    Path("_working/tsne/"),
+    perplexity=30,
+    random_state=42
+)
+print(f"Interactive HTML saved to: {html_path}")
 ```
 
 #### Understanding t-SNE Parameters
@@ -1223,11 +1264,14 @@ print(f"Saved to: {viz_path}")
 #### Visualization Notes
 
 - This is a **build-time analysis tool** - not used during runtime name generation
-- Requires scikit-learn, matplotlib, numpy, and pandas (install with `pip install -e ".[build-tools]"`)
+- **Required dependencies** (install with `pip install -e ".[build-tools]"`):
+  - scikit-learn, matplotlib, numpy, pandas (for static PNG generation)
+  - plotly (for interactive HTML generation, optional)
 - t-SNE is non-deterministic by default, but we use fixed random seeds for reproducibility
 - Processing time scales roughly O(n²) with corpus size
 - For very large datasets (>50,000 syllables), consider sampling first
-- Visualizations are saved as PNG files for easy sharing and embedding
+- Static visualizations saved as PNG files for easy sharing and embedding
+- Interactive visualizations saved as self-contained HTML files (work in any modern browser)
 
 #### Interpreting the Visualization
 

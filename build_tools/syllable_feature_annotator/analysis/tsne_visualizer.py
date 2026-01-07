@@ -19,21 +19,36 @@ Technical Details:
 - Perplexity=30 (balances local vs global structure)
 - Fixed random seed for reproducibility (seed=42)
 
-Output is saved as a high-resolution PNG to the specified output directory.
+Output Formats:
+- Static PNG: High-resolution matplotlib visualization (always generated)
+- Interactive HTML: Plotly-based interactive visualization (optional, requires --interactive flag)
 
 Usage:
-    # Generate visualization with default paths
+    # Generate static PNG visualization with default paths
     python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer
+
+    # Generate both static PNG and interactive HTML
+    python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \\
+        --interactive \\
+        --save-mapping
 
     # Custom input/output paths
     python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \\
         --input data/annotated/syllables_annotated.json \\
-        --output _working/analysis/tsne/
+        --output _working/analysis/tsne/ \\
+        --interactive
 
     # Adjust t-SNE parameters
     python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \\
         --perplexity 50 \\
-        --random-state 123
+        --random-state 123 \\
+        --interactive
+
+    # High-resolution output with interactive HTML
+    python -m build_tools.syllable_feature_annotator.analysis.tsne_visualizer \\
+        --dpi 600 \\
+        --interactive \\
+        --save-mapping
 
 Programmatic Usage:
     >>> from pathlib import Path
@@ -45,9 +60,12 @@ Programmatic Usage:
     ...     input_path=Path("data/annotated/syllables_annotated.json"),
     ...     output_dir=Path("_working/analysis/tsne/"),
     ...     perplexity=30,
-    ...     random_state=42
+    ...     random_state=42,
+    ...     interactive=True,
+    ...     save_mapping=True
     ... )
-    >>> print(f"Visualization saved to: {result['output_path']}")
+    >>> print(f"Static visualization: {result['output_path']}")
+    >>> print(f"Interactive HTML: {result['interactive_path']}")
 """
 
 import argparse
@@ -58,6 +76,14 @@ from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt  # type: ignore[import-not-found]
 import numpy as np  # type: ignore[import-not-found]
+
+# Optional dependency: Plotly for interactive visualizations
+try:
+    import plotly.graph_objects as go  # type: ignore[import-not-found]
+
+    _PLOTLY_AVAILABLE = True
+except ImportError:
+    _PLOTLY_AVAILABLE = False
 
 # Calculate project root (this file is in build_tools/syllable_feature_annotator/analysis/)
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -244,6 +270,113 @@ def create_tsne_visualization(
     return fig, tsne_coords
 
 
+def create_interactive_visualization(
+    records: List[Dict],
+    tsne_coords: np.ndarray,
+) -> "go.Figure":
+    """Create interactive Plotly visualization of t-SNE feature space.
+
+    This function generates an interactive HTML-compatible visualization with:
+    - Hover tooltips showing syllable text, frequency, and active features
+    - Interactive zoom, pan, and export controls
+    - Frequency-based point sizing and coloring
+    - High-quality rendering suitable for exploration
+
+    Args:
+        records: List of annotated syllable records from load_annotated_data().
+                Each record must contain:
+                - syllable (str): The syllable text
+                - frequency (int): Occurrence count
+                - features (dict): Boolean feature flags (12 features)
+        tsne_coords: t-SNE 2D coordinates with shape (n_syllables, 2)
+
+    Returns:
+        Plotly Figure object with configured interactive scatter plot
+
+    Raises:
+        ImportError: If Plotly is not installed
+
+    Example:
+        >>> records = load_annotated_data(Path("syllables_annotated.json"))
+        >>> feature_matrix, frequencies = extract_feature_matrix(records)
+        >>> fig, tsne_coords = create_tsne_visualization(feature_matrix, frequencies)
+        >>> interactive_fig = create_interactive_visualization(records, tsne_coords)
+        >>> interactive_fig.show()  # Display in browser
+
+    Notes:
+        - Point size uses log1p scale for better visibility across frequency ranges
+        - Viridis colormap provides perceptually uniform coloring
+        - Hover text limited to 4 features for readability (shows +N more if applicable)
+        - Plotly CDN used for smaller file size when saving HTML
+    """
+    if not _PLOTLY_AVAILABLE:
+        raise ImportError(
+            "Plotly is required for interactive visualization. " "Install with: pip install plotly"
+        )
+
+    # Extract data for visualization
+    syllables = [r["syllable"] for r in records]
+    frequencies = np.array([r["frequency"] for r in records])
+
+    # Build rich hover text with syllable details
+    hover_texts = []
+    for record in records:
+        active_features = [feat for feat, val in record["features"].items() if val]
+        hover_text = (
+            f"<b>{record['syllable']}</b><br>"
+            f"Frequency: {record['frequency']:,}<br>"
+            f"Features: {len(active_features)}/12<br>"
+            f"<i>{', '.join(active_features[:4])}</i>"
+        )
+        if len(active_features) > 4:
+            hover_text += f"<br><i>... +{len(active_features)-4} more</i>"
+        hover_texts.append(hover_text)
+
+    # Create figure with main scatter trace
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=tsne_coords[:, 0],
+            y=tsne_coords[:, 1],
+            mode="markers",
+            marker=dict(
+                size=np.log1p(frequencies) * 3,  # Log scale for better visibility
+                color=frequencies,
+                colorscale="Viridis",
+                showscale=True,
+                colorbar=dict(title="Frequency"),
+                line=dict(width=0.5, color="black"),
+                opacity=0.7,
+            ),
+            text=syllables,
+            hovertext=hover_texts,
+            hoverinfo="text",
+            customdata=[[i] for i in range(len(records))],  # Store index for future callbacks
+            name="Syllables",
+        )
+    )
+
+    # Configure layout for optimal viewing
+    fig.update_layout(
+        title={
+            "text": "t-SNE: Feature Signature Space (Interactive)",
+            "x": 0.5,
+            "xanchor": "center",
+            "font": {"size": 20, "family": "Arial, sans-serif"},
+        },
+        xaxis_title="t-SNE Dimension 1",
+        yaxis_title="t-SNE Dimension 2",
+        hovermode="closest",
+        width=1200,
+        height=900,
+        template="plotly_white",
+        showlegend=True,
+    )
+
+    return fig
+
+
 def save_visualization(
     fig: plt.Figure,
     output_dir: Path,
@@ -315,6 +448,121 @@ def save_visualization(
     meta_path.write_text("\n".join(metadata), encoding="utf-8")
 
     return viz_path, meta_path
+
+
+def save_interactive_visualization(
+    fig: "go.Figure",
+    output_dir: Path,
+    perplexity: int = 30,
+    random_state: int = 42,
+) -> Path:
+    """Save interactive Plotly visualization as standalone HTML file.
+
+    Creates a self-contained HTML file with embedded Plotly visualization that can be:
+    - Opened directly in any web browser
+    - Shared with collaborators
+    - Embedded in reports or documentation
+    - Explored with zoom, pan, hover, and export controls
+
+    The HTML file uses Plotly CDN for JavaScript dependencies, resulting in smaller
+    file sizes while maintaining full functionality.
+
+    Args:
+        fig: Plotly Figure object from create_interactive_visualization()
+        output_dir: Directory to save HTML file in (created if doesn't exist)
+        perplexity: t-SNE perplexity parameter used for generation (for metadata footer)
+        random_state: Random seed used for generation (for metadata footer)
+
+    Returns:
+        Path to saved HTML file with timestamped filename
+
+    Raises:
+        ImportError: If Plotly is not installed
+
+    Example:
+        >>> records = load_annotated_data(Path("syllables_annotated.json"))
+        >>> feature_matrix, frequencies = extract_feature_matrix(records)
+        >>> fig_static, tsne_coords = create_tsne_visualization(feature_matrix, frequencies)
+        >>> fig_interactive = create_interactive_visualization(records, tsne_coords)
+        >>> html_path = save_interactive_visualization(fig_interactive, Path("_working/analysis/tsne/"))
+        >>> print(f"Saved to: {html_path}")
+
+    Notes:
+        - Output filename format: YYYYMMDD_HHMMSS.tsne_interactive.html
+        - File includes metadata footer with algorithm parameters
+        - Plotly mode bar configured with additional tools (hoverclosest, hovercompare)
+        - Export to PNG button configured for high-resolution output (1600x1200, 2x scale)
+        - HTML is self-contained except for Plotly CDN dependency
+    """
+    if not _PLOTLY_AVAILABLE:
+        raise ImportError("Plotly is required for interactive visualization.")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate timestamped filename matching existing convention
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    html_path = output_dir / f"{timestamp}.tsne_interactive.html"
+
+    # Save as standalone HTML with configuration
+    fig.write_html(
+        str(html_path),
+        include_plotlyjs="cdn",  # Use CDN for smaller file size
+        config={
+            "displayModeBar": True,
+            "displaylogo": False,
+            "modeBarButtonsToAdd": ["hoverclosest", "hovercompare"],
+            "toImageButtonOptions": {
+                "format": "png",
+                "filename": f"tsne_interactive_{timestamp}",
+                "height": 1200,
+                "width": 1600,
+                "scale": 2,
+            },
+        },
+    )
+
+    # Append metadata footer to HTML
+    metadata_html = f"""
+<!-- t-SNE Visualization Metadata -->
+<div style="margin: 20px; padding: 15px; background-color: #f5f5f5;
+            border-radius: 8px; font-family: 'Courier New', monospace; font-size: 13px;
+            border: 1px solid #ddd;">
+    <div style="font-weight: bold; font-size: 14px; margin-bottom: 10px; color: #333;">
+        t-SNE Visualization Parameters
+    </div>
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td style="padding: 4px; color: #666;">Algorithm:</td>
+            <td style="padding: 4px; color: #000;">t-SNE (t-distributed Stochastic Neighbor Embedding)</td>
+        </tr>
+        <tr>
+            <td style="padding: 4px; color: #666;">Perplexity:</td>
+            <td style="padding: 4px; color: #000;">{perplexity}</td>
+        </tr>
+        <tr>
+            <td style="padding: 4px; color: #666;">Random State:</td>
+            <td style="padding: 4px; color: #000;">{random_state}</td>
+        </tr>
+        <tr>
+            <td style="padding: 4px; color: #666;">Distance Metric:</td>
+            <td style="padding: 4px; color: #000;">Hamming (optimal for binary features)</td>
+        </tr>
+        <tr>
+            <td style="padding: 4px; color: #666;">Generated:</td>
+            <td style="padding: 4px; color: #000;">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</td>
+        </tr>
+    </table>
+    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 11px; color: #777;">
+        <b>Usage:</b> Hover over points to see syllable details. Use toolbar for zoom, pan, and export.
+    </div>
+</div>
+"""
+
+    # Append metadata to HTML file
+    with open(html_path, "a", encoding="utf-8") as f:
+        f.write(metadata_html)
+
+    return html_path
 
 
 def _save_tsne_mapping(
@@ -396,6 +644,7 @@ def run_tsne_visualization(
     dpi: int = 300,
     verbose: bool = False,
     save_mapping: bool = False,
+    interactive: bool = False,
 ) -> Dict:
     """Run the complete t-SNE visualization pipeline.
 
@@ -404,7 +653,7 @@ def run_tsne_visualization(
     2. Extract feature matrix
     3. Apply t-SNE dimensionality reduction
     4. Create visualization
-    5. Save outputs
+    5. Save outputs (PNG + optional HTML + optional mapping)
 
     Args:
         input_path: Path to syllables_annotated.json
@@ -414,6 +663,7 @@ def run_tsne_visualization(
         dpi: Output resolution in dots per inch (default: 300)
         verbose: Print detailed progress information
         save_mapping: Save syllable→features→coordinates mapping as JSON (default: False)
+        interactive: Generate interactive HTML visualization (requires Plotly, default: False)
 
     Returns:
         Dictionary containing:
@@ -423,6 +673,7 @@ def run_tsne_visualization(
             - metadata_path: Path to saved metadata file
             - tsne_coordinates: numpy array of 2D coordinates
             - mapping_path: Path to mapping JSON (None if save_mapping=False)
+            - interactive_path: Path to interactive HTML (None if interactive=False or Plotly unavailable)
 
     Raises:
         FileNotFoundError: If input file does not exist
@@ -433,9 +684,12 @@ def run_tsne_visualization(
         >>> from pathlib import Path
         >>> result = run_tsne_visualization(
         ...     input_path=Path("data/annotated/syllables_annotated.json"),
-        ...     output_dir=Path("_working/analysis/tsne/")
+        ...     output_dir=Path("_working/analysis/tsne/"),
+        ...     interactive=True,
+        ...     save_mapping=True
         ... )
         >>> print(f"Visualized {result['syllable_count']} syllables")
+        >>> print(f"Interactive HTML: {result['interactive_path']}")
     """
     if verbose:
         print(f"Loading data from: {input_path}")
@@ -473,6 +727,22 @@ def run_tsne_visualization(
         if verbose:
             print(f"✓ Mapping saved to: {mapping_path}")
 
+    # Conditionally save interactive HTML visualization
+    interactive_path = None
+    if interactive:
+        if not _PLOTLY_AVAILABLE:
+            print("Warning: Plotly not available. Skipping interactive visualization.")
+            print("Install with: pip install plotly")
+        else:
+            if verbose:
+                print("Creating interactive visualization...")
+            interactive_fig = create_interactive_visualization(records, tsne_coords)
+            interactive_path = save_interactive_visualization(
+                interactive_fig, output_dir, perplexity, random_state
+            )
+            if verbose:
+                print(f"✓ Interactive HTML saved to: {interactive_path}")
+
     # Clean up matplotlib figure
     plt.close(fig)
 
@@ -483,6 +753,7 @@ def run_tsne_visualization(
         "metadata_path": meta_path,
         "tsne_coordinates": tsne_coords,
         "mapping_path": mapping_path,
+        "interactive_path": interactive_path,
     }
 
 
@@ -561,6 +832,12 @@ Examples:
     )
 
     parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Generate interactive HTML visualization in addition to static PNG (requires Plotly)",
+    )
+
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Print detailed progress information",
@@ -585,6 +862,11 @@ def main() -> None:
         print(f"Warning: Perplexity {args.perplexity} is outside typical range (5-50)")
         print("This may produce suboptimal results.")
 
+    # Add helpful note if --interactive used without --save-mapping
+    if args.interactive and not args.save_mapping:
+        print("Note: Interactive visualization works best with --save-mapping enabled")
+        print("      to enable coordinate reuse and feature exploration.\n")
+
     if not args.verbose:
         print(f"Generating t-SNE visualization from: {args.input}")
         print(f"Output directory: {args.output}")
@@ -600,6 +882,7 @@ def main() -> None:
             dpi=args.dpi,
             verbose=args.verbose,
             save_mapping=args.save_mapping,
+            interactive=args.interactive,
         )
 
         # Display summary
@@ -609,6 +892,8 @@ def main() -> None:
         print(f"✓ Metadata saved to: {result['metadata_path']}")
         if result["mapping_path"]:
             print(f"✓ Mapping saved to: {result['mapping_path']}")
+        if result["interactive_path"]:
+            print(f"✓ Interactive HTML saved to: {result['interactive_path']}")
 
     except ImportError as e:
         print(f"Error: {e}")

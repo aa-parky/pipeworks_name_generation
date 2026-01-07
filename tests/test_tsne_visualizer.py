@@ -868,3 +868,186 @@ def test_import_from_analysis_package():
     assert callable(create_tsne_visualization)
     assert callable(save_visualization)
     assert callable(run_tsne_visualization)
+
+
+# ============================================================================
+# Interactive Visualization Tests
+# ============================================================================
+
+
+class TestInteractiveVisualization:
+    """Test interactive Plotly visualization features."""
+
+    def test_create_interactive_visualization_basic(self, sample_annotated_records, tmp_path):
+        """Test basic interactive visualization creation."""
+        go = pytest.importorskip("plotly.graph_objects")
+
+        feature_matrix, frequencies = extract_feature_matrix(sample_annotated_records)
+        fig, tsne_coords = create_tsne_visualization(
+            feature_matrix, frequencies, perplexity=2, random_state=42
+        )
+
+        from build_tools.syllable_feature_annotator.analysis.tsne_visualizer import (
+            create_interactive_visualization,
+        )
+
+        interactive_fig = create_interactive_visualization(sample_annotated_records, tsne_coords)
+
+        assert isinstance(interactive_fig, go.Figure)
+        assert len(interactive_fig.data) > 0
+        assert interactive_fig.data[0].mode == "markers"
+        assert len(interactive_fig.data[0].x) == len(sample_annotated_records)
+        assert len(interactive_fig.data[0].y) == len(sample_annotated_records)
+
+    def test_create_interactive_visualization_hover_text(self, sample_annotated_records, tmp_path):
+        """Test that hover text contains syllable details."""
+        pytest.importorskip("plotly")
+
+        feature_matrix, frequencies = extract_feature_matrix(sample_annotated_records)
+        fig, tsne_coords = create_tsne_visualization(
+            feature_matrix, frequencies, perplexity=2, random_state=42
+        )
+
+        from build_tools.syllable_feature_annotator.analysis.tsne_visualizer import (
+            create_interactive_visualization,
+        )
+
+        interactive_fig = create_interactive_visualization(sample_annotated_records, tsne_coords)
+
+        # Check that hover text exists and contains expected content
+        hover_texts = interactive_fig.data[0].hovertext
+        assert len(hover_texts) == len(sample_annotated_records)
+
+        # Check first syllable's hover text
+        first_hover = hover_texts[0]
+        assert sample_annotated_records[0]["syllable"] in first_hover
+        assert "Frequency:" in first_hover
+        assert "Features:" in first_hover
+
+    def test_save_interactive_visualization(self, sample_annotated_records, tmp_path):
+        """Test saving interactive HTML."""
+        pytest.importorskip("plotly")
+
+        feature_matrix, frequencies = extract_feature_matrix(sample_annotated_records)
+        fig, tsne_coords = create_tsne_visualization(
+            feature_matrix, frequencies, perplexity=2, random_state=42
+        )
+
+        from build_tools.syllable_feature_annotator.analysis.tsne_visualizer import (
+            create_interactive_visualization,
+            save_interactive_visualization,
+        )
+
+        interactive_fig = create_interactive_visualization(sample_annotated_records, tsne_coords)
+        html_path = save_interactive_visualization(
+            interactive_fig, tmp_path, perplexity=2, random_state=42
+        )
+
+        assert html_path.exists()
+        assert html_path.suffix == ".html"
+        assert "tsne_interactive" in html_path.name
+
+        # Verify HTML content contains expected elements
+        content = html_path.read_text()
+        assert "plotly" in content.lower()
+        assert "t-SNE" in content
+        assert "perplexity" in content.lower()
+
+    def test_interactive_visualization_metadata_footer(self, sample_annotated_records, tmp_path):
+        """Test that HTML includes metadata footer with parameters."""
+        pytest.importorskip("plotly")
+
+        feature_matrix, frequencies = extract_feature_matrix(sample_annotated_records)
+        fig, tsne_coords = create_tsne_visualization(
+            feature_matrix, frequencies, perplexity=3, random_state=123
+        )
+
+        from build_tools.syllable_feature_annotator.analysis.tsne_visualizer import (
+            create_interactive_visualization,
+            save_interactive_visualization,
+        )
+
+        interactive_fig = create_interactive_visualization(sample_annotated_records, tsne_coords)
+        html_path = save_interactive_visualization(
+            interactive_fig, tmp_path, perplexity=3, random_state=123
+        )
+
+        content = html_path.read_text()
+        # Check that metadata footer contains parameters
+        assert "perplexity=3" in content.lower() or "3" in content
+        assert "random_state=123" in content.lower() or "123" in content
+        assert "Hamming" in content
+
+    def test_interactive_flag_in_pipeline(self, annotated_json_file, tmp_path):
+        """Test full pipeline with interactive flag."""
+        pytest.importorskip("plotly")
+
+        result = run_tsne_visualization(
+            input_path=annotated_json_file,
+            output_dir=tmp_path,
+            perplexity=2,
+            random_state=42,
+            interactive=True,
+            save_mapping=True,
+        )
+
+        assert result["interactive_path"] is not None
+        assert result["interactive_path"].exists()
+        assert "tsne_interactive" in result["interactive_path"].name
+
+        # Verify other outputs still exist
+        assert result["output_path"].exists()
+        assert result["metadata_path"].exists()
+        assert result["mapping_path"].exists()
+
+    def test_interactive_without_plotly(self, annotated_json_file, tmp_path, monkeypatch):
+        """Test graceful degradation when Plotly not available."""
+        # Mock Plotly as unavailable
+        monkeypatch.setattr(
+            "build_tools.syllable_feature_annotator.analysis.tsne_visualizer._PLOTLY_AVAILABLE",
+            False,
+        )
+
+        result = run_tsne_visualization(
+            input_path=annotated_json_file,
+            output_dir=tmp_path,
+            perplexity=2,
+            random_state=42,
+            interactive=True,
+        )
+
+        # Should complete without error, but no interactive output
+        assert result["interactive_path"] is None
+        # Static outputs should still exist
+        assert result["output_path"].exists()
+
+    def test_cli_interactive_argument(self, monkeypatch):
+        """Test CLI argument parsing for --interactive."""
+        from build_tools.syllable_feature_annotator.analysis.tsne_visualizer import parse_args
+
+        # Test with --interactive flag
+        monkeypatch.setattr("sys.argv", ["tsne_visualizer.py", "--interactive"])
+        args = parse_args()
+        assert args.interactive is True
+
+        # Test without --interactive flag
+        monkeypatch.setattr("sys.argv", ["tsne_visualizer.py"])
+        args = parse_args()
+        assert args.interactive is False
+
+    def test_interactive_disabled_by_default(self, annotated_json_file, tmp_path):
+        """Test that interactive visualization is not created by default."""
+        result = run_tsne_visualization(
+            input_path=annotated_json_file,
+            output_dir=tmp_path,
+            perplexity=2,
+            random_state=42,
+            interactive=False,  # Explicitly disabled
+        )
+
+        # Interactive path should be None
+        assert result["interactive_path"] is None
+
+        # Static outputs should exist
+        assert result["output_path"].exists()
+        assert result["metadata_path"].exists()
