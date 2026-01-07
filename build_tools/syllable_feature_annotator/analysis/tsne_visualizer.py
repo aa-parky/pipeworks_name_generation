@@ -74,6 +74,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+# Configure matplotlib to use non-interactive backend (for headless environments like CI)
+import matplotlib  # type: ignore[import-not-found]
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # type: ignore[import-not-found]
 import numpy as np  # type: ignore[import-not-found]
 
