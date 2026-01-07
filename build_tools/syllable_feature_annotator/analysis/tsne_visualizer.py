@@ -357,7 +357,7 @@ def create_interactive_visualization(
         )
     )
 
-    # Configure layout for optimal viewing
+    # Configure layout for optimal viewing with responsive sizing
     fig.update_layout(
         title={
             "text": "t-SNE: Feature Signature Space (Interactive)",
@@ -368,8 +368,8 @@ def create_interactive_visualization(
         xaxis_title="t-SNE Dimension 1",
         yaxis_title="t-SNE Dimension 2",
         hovermode="closest",
-        width=1200,
-        height=900,
+        autosize=True,  # Enable responsive sizing
+        height=900,  # Fixed height for consistent aspect ratio
         template="plotly_white",
         showlegend=True,
     )
@@ -520,6 +520,33 @@ def save_interactive_visualization(
             },
         },
     )
+
+    # Inject CSS for responsive layout with minimum width constraint
+    responsive_css = """
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        overflow-x: auto;
+    }
+    .plotly-graph-div {
+        min-width: 1250px !important;
+        width: 100% !important;
+        height: 900px !important;
+    }
+</style>
+"""
+
+    # Read the HTML file and inject CSS after the opening <head> tag
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    # Insert CSS after <head> tag
+    html_content = html_content.replace("<head>", f"<head>\n{responsive_css}")
+
+    # Write back the modified HTML
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
 
     # Append metadata footer to HTML
     metadata_html = f"""
