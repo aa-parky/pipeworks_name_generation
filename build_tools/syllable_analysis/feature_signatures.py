@@ -209,8 +209,19 @@ def run_analysis(input_path: Path, output_dir: Path, limit: Optional[int] = None
     }
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments."""
+def create_argument_parser() -> argparse.ArgumentParser:
+    """
+    Create and return the argument parser for feature signature analysis.
+
+    This function creates the ArgumentParser with all CLI options but does not
+    parse arguments. This separation allows Sphinx documentation tools to
+    introspect the parser and auto-generate CLI documentation.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Configured ArgumentParser ready to parse command-line arguments
+    """
     parser = argparse.ArgumentParser(
         description="Analyze feature signatures in annotated syllable corpus",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -250,6 +261,12 @@ Examples:
         help="Limit number of signatures in report (default: show all)",
     )
 
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = create_argument_parser()
     return parser.parse_args()
 
 

@@ -71,11 +71,18 @@ def sample_syllables(
 # (Phase 2 refactoring)
 
 
-def parse_arguments() -> argparse.Namespace:
-    """Parse command-line arguments.
+def create_argument_parser() -> argparse.ArgumentParser:
+    """
+    Create and return the argument parser for random sampler.
 
-    Returns:
-        Parsed argument namespace.
+    This function creates the ArgumentParser with all CLI options but does not
+    parse arguments. This separation allows Sphinx documentation tools to
+    introspect the parser and auto-generate CLI documentation.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Configured ArgumentParser ready to parse command-line arguments
     """
     parser = argparse.ArgumentParser(
         description="Randomly sample annotated syllables for inspection.",
@@ -128,6 +135,16 @@ Examples:
         help="Random seed for reproducibility (default: None, uses system randomness)",
     )
 
+    return parser
+
+
+def parse_arguments() -> argparse.Namespace:
+    """Parse command-line arguments.
+
+    Returns:
+        Parsed argument namespace.
+    """
+    parser = create_argument_parser()
     return parser.parse_args()
 
 

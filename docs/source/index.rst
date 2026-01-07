@@ -12,6 +12,12 @@ A lightweight, deterministic name generator that produces pronounceable names wi
    Changelog <changelog>
 
 .. toctree::
+   :maxdepth: 2
+   :caption: Build Tools
+
+   build_tools/index
+
+.. toctree::
    :maxdepth: 3
    :caption: API Reference
 

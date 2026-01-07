@@ -272,11 +272,18 @@ def run_tsne_visualization(
     }
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments.
+def create_argument_parser() -> argparse.ArgumentParser:
+    """
+    Create and return the argument parser for t-SNE visualization.
 
-    Returns:
-        Parsed argument namespace with validated parameters
+    This function creates the ArgumentParser with all CLI options but does not
+    parse arguments. This separation allows Sphinx documentation tools to
+    introspect the parser and auto-generate CLI documentation.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Configured ArgumentParser ready to parse command-line arguments
     """
     parser = argparse.ArgumentParser(
         description="Generate t-SNE visualization of feature signature space",
@@ -358,6 +365,16 @@ Examples:
         help="Print detailed progress information",
     )
 
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments.
+
+    Returns:
+        Parsed argument namespace with validated parameters
+    """
+    parser = create_argument_parser()
     return parser.parse_args()
 
 

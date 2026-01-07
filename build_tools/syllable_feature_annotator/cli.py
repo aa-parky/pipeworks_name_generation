@@ -158,6 +158,92 @@ from pathlib import Path
 from build_tools.syllable_feature_annotator.annotator import run_annotation_pipeline
 
 
+def create_argument_parser() -> argparse.ArgumentParser:
+    """
+    Create and return the argument parser for syllable feature annotator.
+
+    This function creates the ArgumentParser with all CLI options but does not
+    parse arguments. This separation allows Sphinx documentation tools to
+    introspect the parser and auto-generate CLI documentation.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Configured ArgumentParser ready to parse command-line arguments
+
+    Examples
+    --------
+    Create parser and inspect options::
+
+        >>> parser = create_argument_parser()
+        >>> parser.prog
+        'cli.py'
+
+    Use parser to parse arguments::
+
+        >>> parser = create_argument_parser()
+        >>> args = parser.parse_args(["--syllables", "data/syllables.txt"])
+        >>> args.syllables
+        PosixPath('data/syllables.txt')
+
+    Notes
+    -----
+    - This function is used by both the CLI and documentation generation
+    - For normal CLI usage, use parse_arguments() instead
+    - Sphinx-argparse can introspect this function to generate docs
+    """
+    parser = argparse.ArgumentParser(
+        description="Annotate syllables with phonetic feature detection",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Annotate with default paths (normalizer output)
+  python -m build_tools.syllable_feature_annotator
+
+  # Annotate with custom paths
+  python -m build_tools.syllable_feature_annotator \\
+    --syllables data/normalized/syllables_unique.txt \\
+    --frequencies data/normalized/syllables_frequencies.json \\
+    --output data/annotated/syllables_annotated.json
+
+  # Enable verbose output
+  python -m build_tools.syllable_feature_annotator --verbose
+
+For more information, see the documentation in CLAUDE.md
+        """,
+    )
+
+    parser.add_argument(
+        "--syllables",
+        type=Path,
+        default=Path("data/normalized/syllables_unique.txt"),
+        help="Path to syllables text file (one per line). Default: data/normalized/syllables_unique.txt",
+    )
+
+    parser.add_argument(
+        "--frequencies",
+        type=Path,
+        default=Path("data/normalized/syllables_frequencies.json"),
+        help="Path to frequencies JSON file. Default: data/normalized/syllables_frequencies.json",
+    )
+
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("data/annotated/syllables_annotated.json"),
+        help="Path for annotated output JSON. Default: data/annotated/syllables_annotated.json",
+    )
+
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed progress information",
+    )
+
+    return parser
+
+
 def parse_arguments(args: list[str] | None = None) -> argparse.Namespace:
     """
     Parse command-line arguments for syllable feature annotator.
@@ -212,55 +298,7 @@ def parse_arguments(args: list[str] | None = None) -> argparse.Namespace:
     - Help message is automatically generated from argument definitions
     - Invalid arguments trigger help message and exit
     """
-    parser = argparse.ArgumentParser(
-        description="Annotate syllables with phonetic feature detection",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Annotate with default paths (normalizer output)
-  python -m build_tools.syllable_feature_annotator
-
-  # Annotate with custom paths
-  python -m build_tools.syllable_feature_annotator \\
-    --syllables data/normalized/syllables_unique.txt \\
-    --frequencies data/normalized/syllables_frequencies.json \\
-    --output data/annotated/syllables_annotated.json
-
-  # Enable verbose output
-  python -m build_tools.syllable_feature_annotator --verbose
-
-For more information, see the documentation in CLAUDE.md
-        """,
-    )
-
-    parser.add_argument(
-        "--syllables",
-        type=Path,
-        default=Path("data/normalized/syllables_unique.txt"),
-        help="Path to syllables text file (one per line). Default: data/normalized/syllables_unique.txt",
-    )
-
-    parser.add_argument(
-        "--frequencies",
-        type=Path,
-        default=Path("data/normalized/syllables_frequencies.json"),
-        help="Path to frequencies JSON file. Default: data/normalized/syllables_frequencies.json",
-    )
-
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("data/annotated/syllables_annotated.json"),
-        help="Path for annotated output JSON. Default: data/annotated/syllables_annotated.json",
-    )
-
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Show detailed progress information",
-    )
-
+    parser = create_argument_parser()
     return parser.parse_args(args)
 
 

@@ -115,9 +115,35 @@ Do not treat these as bugs or missing features in Phase 1. They are intentional 
 
 When extending beyond Phase 1:
 
-1. Maintain determinism at all costs
-2. Keep runtime dependencies minimal
-3. Reserve heavy processing (NLP, corpus analysis) for build-time tools
-4. Pattern data should be in `data/` directory
-5. Build tools should be in `build_tools/` directory
-6. All patterns must be loadable, not hardcoded
+1. **Maintain determinism at all costs**
+2. **Keep runtime dependencies minimal**
+3. **Reserve heavy processing (NLP, corpus analysis) for build-time tools**
+4. **Pattern data should be in `data/` directory**
+5. **Build tools should be in `build_tools/` directory**
+6. **All patterns must be loadable, not hardcoded**
+7. **CLI tools must use `create_argument_parser()` pattern** - See [Development Guide - CLI Documentation Standards](development.md#cli-documentation-standards)
+
+### CLI Tool Requirements
+
+All command-line tools must follow the `create_argument_parser()` pattern for automatic documentation generation:
+
+```python
+def create_argument_parser() -> argparse.ArgumentParser:
+    """Create and return the argument parser."""
+    parser = argparse.ArgumentParser(
+        description="Tool description",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Usage examples...",
+    )
+    # Add arguments with detailed help text
+    return parser
+```
+
+This ensures:
+
+- CLI options are automatically documented via sphinx-argparse
+- Single source of truth (no README drift)
+- Users always see accurate `--option` documentation
+
+See [Development Guide - CLI Documentation Standards](development.md#cli-documentation-standards)
+for complete requirements and examples.

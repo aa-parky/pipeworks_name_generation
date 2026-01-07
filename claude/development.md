@@ -149,6 +149,160 @@ make clean && make html
 # The docs are also built automatically on ReadTheDocs when pushed to GitHub
 ```
 
+## CLI Documentation Standards
+
+**CRITICAL**: All CLI tools MUST document command-line arguments in code, not in README or manual docs.
+
+### The Pattern: `create_argument_parser()`
+
+Every CLI tool must use this pattern for sphinx-argparse compatibility:
+
+```python
+def create_argument_parser() -> argparse.ArgumentParser:
+    """
+    Create and return the argument parser for [tool name].
+
+    This function creates the ArgumentParser with all CLI options but does not
+    parse arguments. This separation allows Sphinx documentation tools to
+    introspect the parser and auto-generate CLI documentation.
+
+    Returns:
+        Configured ArgumentParser ready to parse command-line arguments
+    """
+    parser = argparse.ArgumentParser(
+        description="Clear description of what this tool does",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Basic usage with default settings
+  python -m build_tools.tool_name
+
+  # Custom options
+  python -m build_tools.tool_name --option value --other-option 42
+        """,
+    )
+
+    parser.add_argument(
+        "--option",
+        type=str,
+        default="default_value",
+        help="Detailed help text. Default: default_value",
+    )
+
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=100,
+        help="Number of items to process (default: 100)",
+    )
+
+    return parser
+
+
+def parse_arguments(args: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = create_argument_parser()
+    return parser.parse_args(args)
+```
+
+### Required Elements
+
+1. **Function must be named `create_argument_parser()`** (sphinx-argparse requirement)
+2. **Must return `ArgumentParser` object, NOT `Namespace`** (sphinx needs the parser)
+3. **Every argument must have detailed help text**
+4. **Include default values in help text** (e.g., "Default: 100")
+5. **Use `RawDescriptionHelpFormatter` for epilog examples**
+6. **Add concrete usage examples in epilog**
+
+### Good Help Text Examples
+
+```python
+# ✅ GOOD - Detailed, includes default
+parser.add_argument(
+    "--perplexity",
+    type=int,
+    default=30,
+    help="t-SNE perplexity parameter balancing local vs global structure. "
+         "Typical range: 5-50. Lower values emphasize local clusters, "
+         "higher values preserve global structure (default: 30)",
+)
+
+# ✅ GOOD - Explains purpose clearly
+parser.add_argument(
+    "--output",
+    type=Path,
+    default=Path("_working/output/"),
+    help="Output directory for generated files. Directory will be created "
+         "if it doesn't exist (default: _working/output/)",
+)
+
+# ❌ BAD - Too brief, no default mentioned
+parser.add_argument(
+    "--perplexity",
+    type=int,
+    default=30,
+    help="Perplexity parameter",
+)
+
+# ❌ BAD - No help text at all
+parser.add_argument(
+    "--output",
+    type=Path,
+    default=Path("_working/output/"),
+)
+```
+
+### Integration with Sphinx
+
+The pattern enables automatic CLI documentation via sphinx-argparse:
+
+```rst
+Command-Line Interface
+----------------------
+
+.. argparse::
+   :module: build_tools.tool_name.cli
+   :func: create_argument_parser
+   :prog: python -m build_tools.tool_name
+```
+
+This automatically extracts and formats:
+
+- All `--options` with help text
+- Default values
+- Argument types
+- Required vs optional arguments
+- Usage examples from epilog
+
+### Why This Matters
+
+**Single Source of Truth:**
+
+- CLI options documented in code → automatically appear in Sphinx docs
+- No manual synchronization between README and actual arguments
+- No forgetting what `--options` exist
+
+**User Benefits:**
+
+- Users always see accurate, up-to-date CLI documentation
+- Generated docs show all available options
+- Help text explains purpose, not just syntax
+
+**Developer Benefits:**
+
+- Add new CLI option → documentation updates automatically
+- Remove option → documentation updates automatically
+- Change default → documentation updates automatically
+
+### Existing Examples
+
+See these files for reference implementations:
+
+- `build_tools/syllable_extractor/cli.py` - Full example with batch/interactive modes
+- `build_tools/syllable_normaliser/cli.py` - Comprehensive option set
+- `build_tools/syllable_feature_annotator/cli.py` - Clean, minimal example
+- `build_tools/syllable_analysis/tsne_visualizer.py` - Algorithm parameters example
+
 ## Project Configuration
 
 - **Python Version**: 3.12+

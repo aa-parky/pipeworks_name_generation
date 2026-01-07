@@ -76,6 +76,62 @@ rng = random.Random(seed)  # Creates isolated RNG instance
 # This avoids global state contamination
 ```
 
+### CLI Argument Documentation
+
+**CRITICAL**: All CLI tools must document command-line arguments in code, not in README.
+
+When creating or modifying any CLI tool (anything that uses `argparse`):
+
+1. **Use `create_argument_parser()` function pattern** (required for sphinx-argparse)
+2. **Write detailed help text for EVERY argument**
+3. **Include default values in help text**
+4. **Add examples in epilog section**
+
+```python
+def create_argument_parser() -> argparse.ArgumentParser:
+    """
+    Create and return the argument parser for this tool.
+
+    Returns:
+        Configured ArgumentParser ready to parse command-line arguments
+    """
+    parser = argparse.ArgumentParser(
+        description="Clear description of what this tool does",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Example 1
+  python -m module.name --option value
+
+  # Example 2
+  python -m module.name --other-option value
+        """,
+    )
+
+    parser.add_argument(
+        "--option",
+        type=str,
+        default="default_value",
+        help="Detailed help text explaining what this option does. Default: default_value",
+    )
+
+    return parser
+
+def parse_arguments(args: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = create_argument_parser()
+    return parser.parse_args(args)
+```
+
+**Why this matters:**
+
+- CLI options are automatically documented in Sphinx via sphinx-argparse
+- Single source of truth prevents documentation drift
+- Users can always find accurate `--option` information in generated docs
+- No more forgetting what options exist or keeping README in sync
+
+See [Development Guide - CLI Documentation Standards](claude/development.md#cli-documentation-standards) for details.
+
 ### Testing Requirements
 
 All changes must maintain determinism:

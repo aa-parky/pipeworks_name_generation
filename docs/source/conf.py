@@ -4,6 +4,7 @@ This configuration uses sphinx-autoapi for fully automated documentation
 generation from code docstrings. No manual .rst files needed for API docs.
 """
 
+import logging
 import sys
 from pathlib import Path
 
@@ -27,6 +28,7 @@ extensions = [
     "sphinx.ext.viewcode",  # Add links to source code
     "sphinx.ext.intersphinx",  # Link to other project docs
     "sphinx_autodoc_typehints",  # Better type hint rendering
+    "sphinxarg.ext",  # Auto-generate CLI documentation from argparse
     "myst_parser",  # Support for Markdown files
 ]
 
@@ -114,7 +116,6 @@ myst_heading_anchors = 3
 # Suppress certain expected warnings
 suppress_warnings = [
     "myst.header",  # MyST parser header warnings
-    "ref.python",  # Duplicate object descriptions (dataclass attributes)
     "docutils",  # Inline emphasis warnings from underscores in code
 ]
 
@@ -124,3 +125,34 @@ suppress_warnings = [
 # See: https://github.com/readthedocs/sphinx-autoapi/issues/366
 
 nitpicky = False  # Set to True to enable strict type checking
+
+
+# -- Custom warning filter for dataclass duplicate warnings -----------------
+class FilterDuplicateObjectWarnings(logging.Filter):
+    """
+    Filter to suppress 'duplicate object description' warnings for dataclass attributes.
+
+    These warnings occur because autoapi_python_class_content = "both" causes
+    Sphinx to document attributes from both the class docstring and the
+    auto-generated __init__ method. This is expected behavior for dataclasses
+    and the generated documentation is correct.
+
+    Note: These warnings cannot be suppressed using the sphinx suppress_warnings
+    option, so this manual logging filter approach is necessary.
+    """
+
+    def filter(self, record):
+        # Check if this is a duplicate object description warning
+        is_duplicate_warning = (
+            "duplicate object description of %s, other instance in %s, use :no-index: for one of them"
+            in record.msg
+        )
+        # Return False to suppress the warning, True to allow it
+        return not is_duplicate_warning
+
+
+def setup(app):
+    """Sphinx setup hook to register custom warning filter."""
+    # Get the Sphinx logger and add our custom filter
+    logger = logging.getLogger("sphinx")
+    logger.addFilter(FilterDuplicateObjectWarnings())
