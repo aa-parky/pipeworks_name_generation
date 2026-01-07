@@ -345,7 +345,9 @@ def create_interactive_visualization(
                 color=frequencies,
                 colorscale="Viridis",
                 showscale=True,
-                colorbar=dict(title="Frequency"),
+                colorbar=dict(
+                    title=dict(text="Frequency", side="right"), len=0.75, thickness=15, xpad=10
+                ),
                 line=dict(width=0.5, color="black"),
                 opacity=0.7,
             ),
