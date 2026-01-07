@@ -14,7 +14,7 @@ Test Organization
 -----------------
 1. TestLoadAnnotatedSyllables: JSON loading and validation
 2. TestSampleSyllables: Sampling logic and constraints
-3. TestSaveSamples: File output operations
+3. TestSaveJsonOutput: File output operations (using common.save_json_output)
 4. TestArgumentParsing: CLI argument handling
 5. TestErrorHandling: Error cases and validation
 6. TestDeterminism: Reproducibility with seeds
@@ -40,12 +40,15 @@ from unittest.mock import patch
 
 import pytest
 
-from build_tools.syllable_feature_annotator.analysis.random_sampler import (
+# Import functions from updated locations (Phase 2 refactoring)
+from build_tools.syllable_feature_annotator.analysis.common import (
     load_annotated_syllables,
+    save_json_output,
+)
+from build_tools.syllable_feature_annotator.analysis.random_sampler import (
     main,
     parse_arguments,
     sample_syllables,
-    save_samples,
 )
 
 # =========================================================================
@@ -213,12 +216,16 @@ class TestLoadAnnotatedSyllables:
             load_annotated_syllables(non_list_json)
 
     def test_load_empty_list(self, tmp_path):
-        """Test loading empty JSON list."""
+        """Test loading empty JSON list raises error (Phase 2: updated behavior).
+
+        Note: common.load_annotated_syllables() validates that lists are non-empty
+        by default, unlike the original random_sampler implementation.
+        """
         empty_json = tmp_path / "empty.json"
         with empty_json.open("w") as f:
             json.dump([], f)
-        records = load_annotated_syllables(empty_json)
-        assert records == []
+        with pytest.raises(ValueError, match="contains no records"):
+            load_annotated_syllables(empty_json)
 
 
 # =========================================================================
@@ -280,14 +287,14 @@ class TestSampleSyllables:
 # =========================================================================
 
 
-class TestSaveSamples:
+class TestSaveJsonOutput:
     """Test saving samples to JSON files."""
 
     def test_save_basic(self, temp_output_dir, sample_annotated_data):
         """Test basic saving functionality."""
         output_file = temp_output_dir / "samples.json"
         samples = sample_annotated_data[:3]
-        save_samples(samples, output_file)
+        save_json_output(samples, output_file)
 
         assert output_file.exists()
         with output_file.open() as f:
@@ -298,7 +305,7 @@ class TestSaveSamples:
         """Test that save creates parent directory if needed."""
         output_file = tmp_path / "nested" / "dir" / "samples.json"
         samples = sample_annotated_data[:2]
-        save_samples(samples, output_file)
+        save_json_output(samples, output_file)
 
         assert output_file.exists()
         with output_file.open() as f:
@@ -309,7 +316,7 @@ class TestSaveSamples:
         """Test that JSON is saved with proper formatting."""
         output_file = temp_output_dir / "samples.json"
         samples = sample_annotated_data[:1]
-        save_samples(samples, output_file)
+        save_json_output(samples, output_file)
 
         content = output_file.read_text()
         # Check that JSON is indented (not minified)
@@ -319,7 +326,7 @@ class TestSaveSamples:
     def test_save_empty_list(self, temp_output_dir):
         """Test saving empty sample list."""
         output_file = temp_output_dir / "empty.json"
-        save_samples([], output_file)
+        save_json_output([], output_file)
 
         assert output_file.exists()
         with output_file.open() as f:
@@ -331,10 +338,10 @@ class TestSaveSamples:
         output_file = temp_output_dir / "samples.json"
 
         # Save first set
-        save_samples(sample_annotated_data[:2], output_file)
+        save_json_output(sample_annotated_data[:2], output_file)
 
         # Save second set (should overwrite)
-        save_samples(sample_annotated_data[2:4], output_file)
+        save_json_output(sample_annotated_data[2:4], output_file)
 
         with output_file.open() as f:
             loaded = json.load(f)
@@ -567,7 +574,7 @@ class TestIntegration:
 
         # Save
         output_file = temp_output_dir / "samples.json"
-        save_samples(samples, output_file)
+        save_json_output(samples, output_file)
         assert output_file.exists()
 
         # Verify saved content
@@ -660,7 +667,7 @@ class TestIntegration:
 
         # Save
         output_file = temp_output_dir / "all_samples.json"
-        save_samples(samples, output_file)
+        save_json_output(samples, output_file)
 
         # Load saved samples
         with output_file.open() as f:

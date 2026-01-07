@@ -17,19 +17,18 @@ Output is saved to _working/analysis/feature_signatures/ for review.
 """
 
 import argparse
-import json
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Counter as CounterType
 from typing import Dict, List, Optional, Tuple
 
-# Calculate project root (this file is in build_tools/syllable_feature_annotator/analysis/)
-ROOT = Path(__file__).resolve().parent.parent.parent.parent
-
-# Default paths
-DEFAULT_INPUT = ROOT / "data" / "annotated" / "syllables_annotated.json"
-DEFAULT_OUTPUT_DIR = ROOT / "_working" / "analysis" / "feature_signatures"
+from build_tools.syllable_feature_annotator.analysis.common import (
+    default_paths,
+    ensure_output_dir,
+    generate_timestamped_path,
+    load_annotated_syllables,
+)
 
 
 def extract_signature(features: Dict[str, bool]) -> Tuple[str, ...]:
@@ -164,12 +163,11 @@ def save_report(report: str, output_dir: Path) -> Path:
     Returns:
         Path to the saved report file
     """
-    # Create output directory if it doesn't exist
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Ensure output directory exists
+    ensure_output_dir(output_dir)
 
-    # Generate timestamped filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = output_dir / f"{timestamp}.feature_signatures.txt"
+    # Generate timestamped output path
+    output_path = generate_timestamped_path(output_dir, "feature_signatures", "txt")
 
     # Write report
     output_path.write_text(report, encoding="utf-8")
@@ -192,8 +190,7 @@ def run_analysis(input_path: Path, output_dir: Path, limit: Optional[int] = None
         - output_path: Path to the saved report
     """
     # Load annotated syllables
-    with input_path.open(encoding="utf-8") as f:
-        records = json.load(f)
+    records = load_annotated_syllables(input_path)
 
     # Analyze signatures
     signature_counter = analyze_feature_signatures(records)
@@ -235,15 +232,15 @@ Examples:
     parser.add_argument(
         "--input",
         type=Path,
-        default=DEFAULT_INPUT,
-        help=f"Path to syllables_annotated.json (default: {DEFAULT_INPUT})",
+        default=default_paths.annotated_syllables,
+        help=f"Path to syllables_annotated.json (default: {default_paths.annotated_syllables})",
     )
 
     parser.add_argument(
         "--output",
         type=Path,
-        default=DEFAULT_OUTPUT_DIR,
-        help=f"Output directory for analysis results (default: {DEFAULT_OUTPUT_DIR})",
+        default=default_paths.analysis_output_dir("feature_signatures"),
+        help=f"Output directory for analysis results (default: {default_paths.analysis_output_dir('feature_signatures')})",
     )
 
     parser.add_argument(

@@ -3,6 +3,11 @@
 This subpackage provides post-annotation analysis utilities for inspecting
 and understanding the annotated syllable corpus.
 
+Subpackages
+-----------
+**common**: Shared utilities (data I/O, paths, output management)
+**dimensionality**: Dimensionality reduction (feature matrices, t-SNE, mapping)
+
 Available Tools
 ---------------
 **random_sampler**: Random sampling utility for QA and inspection
@@ -25,16 +30,28 @@ t-SNE visualization::
 
 Programmatic Usage
 ------------------
+Using common utilities::
+
+    >>> from build_tools.syllable_feature_annotator.analysis import (
+    ...     default_paths,
+    ...     load_annotated_syllables,
+    ...     ensure_output_dir,
+    ... )
+    >>> # Load data using default paths
+    >>> records = load_annotated_syllables(default_paths.annotated_syllables)
+    >>> # Prepare output directory
+    >>> output_dir = ensure_output_dir(default_paths.analysis_output_dir("my_tool"))
+
 Random sampling::
 
     >>> from build_tools.syllable_feature_annotator.analysis import (
     ...     load_annotated_syllables,
     ...     sample_syllables,
-    ...     save_samples
+    ...     save_json_output
     ... )
     >>> records = load_annotated_syllables(Path("data/annotated/syllables_annotated.json"))
     >>> samples = sample_syllables(records, 50, seed=42)
-    >>> save_samples(samples, Path("output.json"))
+    >>> save_json_output(samples, Path("output.json"))
 
 Feature signature analysis::
 
@@ -61,6 +78,30 @@ t-SNE visualization::
     ... )
 """
 
+# Common utilities (NEW - Phase 1 refactoring)
+from build_tools.syllable_feature_annotator.analysis.common import (
+    AnalysisPathConfig,
+    default_paths,
+    ensure_output_dir,
+    generate_output_pair,
+    generate_timestamped_path,
+    load_annotated_syllables,
+    load_frequency_data,
+    save_json_output,
+)
+
+# Dimensionality reduction utilities (NEW - Phase 4 refactoring)
+from build_tools.syllable_feature_annotator.analysis.dimensionality import (
+    ALL_FEATURES,
+    apply_tsne,
+    calculate_optimal_perplexity,
+    create_tsne_mapping,
+    extract_feature_matrix,
+    get_feature_vector,
+    save_tsne_mapping,
+    validate_feature_matrix,
+)
+
 # Feature signatures exports
 from build_tools.syllable_feature_annotator.analysis.feature_signatures import (
     analyze_feature_signatures,
@@ -74,14 +115,11 @@ from build_tools.syllable_feature_annotator.analysis.feature_signatures import (
 )
 
 # Random sampler exports
-from build_tools.syllable_feature_annotator.analysis.random_sampler import (
-    load_annotated_syllables,
-    sample_syllables,
-    save_samples,
-)
+# Note: load_annotated_syllables is now imported from common (above)
 from build_tools.syllable_feature_annotator.analysis.random_sampler import (
     parse_arguments as parse_random_sampler_arguments,
 )
+from build_tools.syllable_feature_annotator.analysis.random_sampler import sample_syllables
 
 # t-SNE visualizer exports (optional - requires matplotlib, numpy, pandas, scikit-learn)
 try:
@@ -116,10 +154,26 @@ except ImportError:
     parse_tsne_visualizer_args = _tsne_not_available
 
 __all__ = [
-    # Random sampler
+    # Common utilities (Phase 1 refactoring)
+    "AnalysisPathConfig",
+    "default_paths",
     "load_annotated_syllables",
+    "load_frequency_data",
+    "save_json_output",
+    "ensure_output_dir",
+    "generate_timestamped_path",
+    "generate_output_pair",
+    # Dimensionality reduction (Phase 4 refactoring)
+    "ALL_FEATURES",
+    "extract_feature_matrix",
+    "validate_feature_matrix",
+    "get_feature_vector",
+    "apply_tsne",
+    "calculate_optimal_perplexity",
+    "create_tsne_mapping",
+    "save_tsne_mapping",
+    # Random sampler
     "sample_syllables",
-    "save_samples",
     "parse_random_sampler_arguments",
     # Feature signatures
     "extract_signature",
@@ -131,7 +185,6 @@ __all__ = [
     # t-SNE visualizer (optional)
     "_TSNE_AVAILABLE",
     "load_annotated_data",
-    "extract_feature_matrix",
     "create_tsne_visualization",
     "save_visualization",
     "run_tsne_visualization",

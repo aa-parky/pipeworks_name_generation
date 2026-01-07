@@ -4,6 +4,9 @@ This module provides functionality to randomly sample annotated syllables for in
 and quality assurance. It reads the output of the syllable feature annotator and generates
 a random sample in JSON format.
 
+This module has been refactored (Phase 2) to use common utilities from the
+analysis.common package, eliminating code duplication.
+
 Usage:
     # Sample 100 syllables (default)
     python -m build_tools.syllable_feature_annotator.analysis.random_sampler
@@ -22,36 +25,20 @@ Usage:
 """
 
 import argparse
-import json
+import json  # Still needed for JSONDecodeError in exception handling
 import random
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+# Import common utilities (Phase 2 refactoring)
+from build_tools.syllable_feature_annotator.analysis.common import (
+    default_paths,
+    load_annotated_syllables,
+    save_json_output,
+)
 
-def load_annotated_syllables(input_path: Path) -> List[Dict[str, Any]]:
-    """Load annotated syllables from JSON file.
-
-    Args:
-        input_path: Path to the annotated syllables JSON file.
-
-    Returns:
-        List of annotated syllable records.
-
-    Raises:
-        FileNotFoundError: If input file does not exist.
-        json.JSONDecodeError: If input file is not valid JSON.
-    """
-    if not input_path.exists():
-        raise FileNotFoundError(f"Input file not found: {input_path}")
-
-    with input_path.open() as f:
-        records = json.load(f)
-
-    if not isinstance(records, list):
-        raise ValueError(f"Expected list of records, got {type(records).__name__}")
-
-    return records
+# Note: load_annotated_syllables() has been moved to common.data_io (Phase 2 refactoring)
 
 
 def sample_syllables(
@@ -80,19 +67,8 @@ def sample_syllables(
     return rng.sample(records, sample_count)
 
 
-def save_samples(samples: List[Dict[str, Any]], output_path: Path) -> None:
-    """Save sampled syllables to JSON file.
-
-    Args:
-        samples: List of sampled syllable records.
-        output_path: Path where output JSON file will be saved.
-    """
-    # Ensure output directory exists
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Write JSON with indentation for readability
-    with output_path.open("w") as f:
-        json.dump(samples, f, indent=2)
+# Note: save_samples() has been replaced with save_json_output() from common.data_io
+# (Phase 2 refactoring)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -123,21 +99,19 @@ Examples:
         """,
     )
 
-    # Get project root for default paths
-    root = Path(__file__).resolve().parent.parent.parent.parent
-
+    # Use default_paths from common module (Phase 2 refactoring)
     parser.add_argument(
         "--input",
         type=Path,
-        default=root / "data" / "annotated" / "syllables_annotated.json",
-        help="Path to input annotated syllables JSON file (default: data/annotated/syllables_annotated.json)",
+        default=default_paths.annotated_syllables,
+        help=f"Path to input annotated syllables JSON file (default: {default_paths.annotated_syllables})",
     )
 
     parser.add_argument(
         "--output",
         type=Path,
-        default=root / "_working" / "random_samples.json",
-        help="Path to output samples JSON file (default: _working/random_samples.json)",
+        default=default_paths.root / "_working" / "random_samples.json",
+        help=f"Path to output samples JSON file (default: {default_paths.root / '_working' / 'random_samples.json'})",
     )
 
     parser.add_argument(
@@ -179,9 +153,9 @@ def main() -> int:
 
         samples = sample_syllables(records, args.samples, args.seed)
 
-        # Save samples
+        # Save samples using common.save_json_output() (Phase 2 refactoring)
         print(f"Saving samples to {args.output}...")
-        save_samples(samples, args.output)
+        save_json_output(samples, args.output)
 
         print(f"✓ Successfully saved {len(samples)} random samples to {args.output}")
         return 0
