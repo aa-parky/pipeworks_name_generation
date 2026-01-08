@@ -619,6 +619,11 @@ def main_interactive():
         - YYYYMMDD_HHMMSS.syllables.LANG.txt: One syllable per line, sorted
         - YYYYMMDD_HHMMSS.meta.LANG.txt: Extraction metadata and statistics
 
+    Corpus Database Integration:
+        All interactive mode extractions are automatically recorded to the corpus
+        database ledger (data/raw/syllable_extractor.db) for build provenance
+        tracking. Recording is optional - extraction succeeds even if ledger fails.
+
     Both files are saved to _working/output/ by default.
     """
     print("\n" + "=" * 70)
@@ -708,6 +713,34 @@ def main_interactive():
 
         break
 
+    # Initialize corpus_db ledger for provenance tracking
+    run_id = None
+    ledger = None
+
+    if CORPUS_DB_AVAILABLE:
+        try:
+            ledger = CorpusLedger()
+            pyphen_lang = None if language_code == "auto" else language_code
+
+            run_id = ledger.start_run(
+                extractor_tool="syllable_extractor",
+                extractor_version=EXTRACTOR_VERSION,
+                pyphen_lang=pyphen_lang,
+                min_len=min_len,
+                max_len=max_len,
+                command_line=" ".join(sys.argv),
+            )
+        except Exception as e:
+            print(f"Warning: Failed to initialize corpus_db: {e}", file=sys.stderr)
+            run_id = None
+            ledger = None
+
+    # Record input to corpus_db
+    if run_id is not None and ledger is not None:
+        _record_corpus_db_safe(
+            "input", lambda: ledger.record_input(run_id, input_path), quiet=False
+        )
+
     # Step 5: Extract syllables
     print(f"\n⏳ Processing {input_path}...")
     try:
@@ -730,6 +763,14 @@ def main_interactive():
             print(f"✓ Extracted {len(syllables)} unique syllables")
     except Exception as e:
         print(f"\nError during extraction: {e}")
+        # Record failed run to corpus_db before exiting
+        if run_id is not None and ledger is not None:
+            _record_corpus_db_safe(
+                "complete run",
+                lambda: ledger.complete_run(run_id, exit_code=1, status="failed"),
+                quiet=True,
+            )
+            _record_corpus_db_safe("close ledger", lambda: ledger.close(), quiet=True)
         sys.exit(1)
 
     # Step 6: Generate output filenames and create result object
@@ -755,6 +796,14 @@ def main_interactive():
         print("✓ Syllables saved successfully")
     except Exception as e:
         print(f"\nError saving syllables: {e}")
+        # Record failed run to corpus_db before exiting
+        if run_id is not None and ledger is not None:
+            _record_corpus_db_safe(
+                "complete run",
+                lambda: ledger.complete_run(run_id, exit_code=1, status="failed"),
+                quiet=True,
+            )
+            _record_corpus_db_safe("close ledger", lambda: ledger.close(), quiet=True)
         sys.exit(1)
 
     # Step 8: Save metadata
@@ -764,7 +813,39 @@ def main_interactive():
         print("✓ Metadata saved successfully")
     except Exception as e:
         print(f"\nError saving metadata: {e}")
+        # Record failed run to corpus_db before exiting
+        if run_id is not None and ledger is not None:
+            _record_corpus_db_safe(
+                "complete run",
+                lambda: ledger.complete_run(run_id, exit_code=1, status="failed"),
+                quiet=True,
+            )
+            _record_corpus_db_safe("close ledger", lambda: ledger.close(), quiet=True)
         sys.exit(1)
+
+    # Record output to corpus_db
+    if run_id is not None and ledger is not None:
+        _record_corpus_db_safe(
+            "output",
+            lambda: ledger.record_output(
+                run_id,
+                output_path=syllables_path,
+                unique_syllable_count=len(syllables),
+                meta_path=metadata_path,
+            ),
+            quiet=False,
+        )
+
+    # Complete corpus_db run recording
+    if run_id is not None and ledger is not None:
+        _record_corpus_db_safe(
+            "complete run",
+            lambda: ledger.complete_run(run_id, exit_code=0, status="completed"),
+            quiet=False,
+        )
+
+        # Close ledger connection
+        _record_corpus_db_safe("close ledger", lambda: ledger.close(), quiet=True)
 
     # Step 9: Display summary to console
     print("\n" + result.format_metadata())
@@ -800,7 +881,7 @@ def main_batch(args: argparse.Namespace):
         All batch mode extractions are automatically recorded to the corpus
         database ledger (data/raw/syllable_extractor.db) for build provenance
         tracking. Recording is optional - extraction succeeds even if ledger
-        fails. Interactive mode does not use corpus_db.
+        fails.
 
     Exit Codes:
         0: All files processed successfully
