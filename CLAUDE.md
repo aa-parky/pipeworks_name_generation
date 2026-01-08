@@ -132,6 +132,85 @@ def parse_arguments(args: list[str] | None = None) -> argparse.Namespace:
 
 See [Development Guide - CLI Documentation Standards](claude/development.md#cli-documentation-standards) for details.
 
+### Documentation Content Rules
+
+**Single Source of Truth:** Documentation should live where it's most naturally
+maintained and automatically propagate where possible.
+
+#### What Goes in Code Docstrings (Auto-Generated)
+
+Module `__init__.py` docstrings should contain:
+
+1. **Module Identity** (1-2 sentences)
+   - What is this tool/module?
+   - Build-time vs runtime designation
+
+2. **Core Capabilities** (bullet points)
+   - Key features list
+   - Supported modes/workflows (high-level)
+
+3. **Basic Usage Example** (3-10 lines)
+   - Minimal working example showing primary use case
+
+**Format:** Google-style docstrings
+
+**Example:**
+
+```python
+"""
+Syllable Extractor - Dictionary-Based Syllable Extraction
+
+Dictionary-based hyphenation using pyphen (LibreOffice dictionaries).
+This is a **build-time tool only** - not used during runtime name generation.
+
+Features:
+- Support for 40+ languages
+- Automatic language detection (optional)
+- Configurable syllable length constraints
+- Deterministic extraction
+
+Usage:
+    >>> from build_tools.syllable_extractor import SyllableExtractor
+    >>> extractor = SyllableExtractor('en_US', min_syllable_length=2)
+    >>> syllables = extractor.extract_syllables_from_text("Hello world")
+"""
+```
+
+#### What Stays in RST Files (Manual)
+
+RST files (`docs/source/build_tools/*.rst`) should contain:
+
+1. **Auto-generated sections** (via directives)
+   - `.. automodule::` for module overview
+   - `.. argparse::` for CLI reference
+
+2. **Detailed tutorials and examples**
+   - Multi-scenario usage examples
+   - Step-by-step workflows
+   - Comparative examples ("when to use X vs Y")
+
+3. **Reference specifications**
+   - Output format specifications
+   - File naming conventions
+   - Data structure documentation
+
+4. **Conceptual explanations**
+   - "How it works" sections
+   - Architecture/design rationale
+   - Multi-paragraph explanations
+
+5. **Warnings and important notes**
+   - Caveats and gotchas
+   - Performance considerations
+   - Common pitfalls
+
+#### Decision Matrix
+
+When adding documentation, ask: **"Does this change when code capabilities change?"**
+
+- **Yes** → Put in code docstring (will auto-propagate)
+- **No** → Put in RST (stable reference/tutorial content)
+
 ### CLI Documentation Synchronization
 
 When modifying CLI tools (`build_tools/**/cli.py` or `__main__.py`):
