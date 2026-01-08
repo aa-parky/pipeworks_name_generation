@@ -18,6 +18,7 @@ Features:
 - Deterministic extraction (same input = same output)
 - Unicode support for accented characters
 - Comprehensive metadata and statistics
+- Automatic provenance tracking via corpus_db ledger (batch mode)
 
 Main Components:
 

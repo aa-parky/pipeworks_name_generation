@@ -12,13 +12,27 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import List
+from typing import Any, Callable, List
 
 from .extractor import SyllableExtractor
 from .file_io import DEFAULT_OUTPUT_DIR, generate_output_filename, save_metadata
 from .language_detection import is_detection_available
 from .languages import SUPPORTED_LANGUAGES
 from .models import BatchResult, ExtractionResult, FileProcessingResult
+
+# Corpus DB integration (optional)
+try:
+    from build_tools.corpus_db import CorpusLedger
+
+    CORPUS_DB_AVAILABLE = True
+except ImportError:
+    CORPUS_DB_AVAILABLE = False
+
+# Version for ledger
+try:
+    from build_tools.syllable_extractor import __version__ as EXTRACTOR_VERSION  # noqa: N812
+except (ImportError, AttributeError):
+    EXTRACTOR_VERSION = "unknown"
 
 # Try to enable readline for tab completion (Unix/Mac)
 # On Windows, pyreadline3 provides similar functionality
@@ -28,6 +42,29 @@ try:
     READLINE_AVAILABLE = True
 except ImportError:
     READLINE_AVAILABLE = False
+
+
+def _record_corpus_db_safe(operation: str, func: Callable[[], Any], quiet: bool = False) -> Any:
+    """
+    Execute corpus_db operation with safe error handling.
+
+    If corpus_db recording fails, logs warning to stderr but allows
+    extraction to continue. Ensures corpus_db is purely observational.
+
+    Args:
+        operation: Description of operation (e.g., "start run")
+        func: Callable performing the corpus_db operation
+        quiet: If True, suppress warning messages
+
+    Returns:
+        Result of func() if successful, None if failed
+    """
+    try:
+        return func()
+    except Exception as e:
+        if not quiet:
+            print(f"Warning: Failed to record {operation} to corpus_db: {e}", file=sys.stderr)
+        return None
 
 
 def path_completer(text, state):
@@ -759,6 +796,12 @@ def main_batch(args: argparse.Namespace):
             - quiet: Suppress progress indicators
             - verbose: Show detailed processing information
 
+    Corpus Database Integration:
+        All batch mode extractions are automatically recorded to the corpus
+        database ledger (data/raw/syllable_extractor.db) for build provenance
+        tracking. Recording is optional - extraction succeeds even if ledger
+        fails. Interactive mode does not use corpus_db.
+
     Exit Codes:
         0: All files processed successfully
         1: One or more files failed to process
@@ -783,6 +826,31 @@ def main_batch(args: argparse.Namespace):
     else:
         print("Error: Either --lang or --auto must be specified")
         sys.exit(1)
+
+    # Initialize corpus_db ledger for provenance tracking
+    run_id = None
+    ledger = None
+
+    if CORPUS_DB_AVAILABLE:
+        try:
+            ledger = CorpusLedger()
+            pyphen_lang = None if language_code == "auto" else language_code
+
+            run_id = ledger.start_run(
+                extractor_tool="syllable_extractor",
+                extractor_version=EXTRACTOR_VERSION,
+                pyphen_lang=pyphen_lang,
+                min_len=args.min,
+                max_len=args.max,
+                recursive=args.recursive,
+                pattern=args.pattern,
+                command_line=" ".join(sys.argv),
+            )
+        except Exception as e:
+            if not args.quiet:
+                print(f"Warning: Failed to initialize corpus_db: {e}", file=sys.stderr)
+            run_id = None
+            ledger = None
 
     # Collect files to process
     files_to_process: List[Path] = []
@@ -837,6 +905,30 @@ def main_batch(args: argparse.Namespace):
         print(f"Error: {e}")
         sys.exit(1)
 
+    # Record inputs to corpus_db
+    if run_id is not None and ledger is not None:
+        if args.file:
+            # Single file
+            _record_corpus_db_safe(
+                "input", lambda: ledger.record_input(run_id, files_to_process[0]), quiet=args.quiet
+            )
+        elif args.files:
+            # Multiple files - record each
+            for file_path in files_to_process:
+                _record_corpus_db_safe(
+                    "input",
+                    lambda fp=file_path: ledger.record_input(run_id, fp),  # type: ignore[misc]
+                    quiet=args.quiet,
+                )
+        elif args.source:
+            # Directory - record with file count
+            source_path = Path(args.source).expanduser().resolve()
+            _record_corpus_db_safe(
+                "input",
+                lambda: ledger.record_input(run_id, source_path, file_count=len(files_to_process)),
+                quiet=args.quiet,
+            )
+
     # Determine output directory
     output_dir = Path(args.output).expanduser().resolve() if args.output else DEFAULT_OUTPUT_DIR
 
@@ -861,6 +953,39 @@ def main_batch(args: argparse.Namespace):
         quiet=args.quiet,
         verbose=args.verbose,
     )
+
+    # Record outputs to corpus_db
+    if run_id is not None and ledger is not None:
+        for result in batch_result.results:
+            if result.success:
+                _record_corpus_db_safe(
+                    "output",
+                    lambda r=result: ledger.record_output(  # type: ignore[misc]
+                        run_id,
+                        output_path=r.syllables_output_path,
+                        unique_syllable_count=r.syllables_count,
+                        meta_path=r.metadata_output_path,
+                    ),
+                    quiet=args.quiet,
+                )
+
+    # Complete corpus_db run recording
+    if run_id is not None and ledger is not None:
+        exit_code = 1 if batch_result.failed > 0 else 0
+        status = "completed" if batch_result.failed == 0 else "failed"
+
+        _record_corpus_db_safe(
+            "complete run",
+            lambda: ledger.complete_run(run_id, exit_code=exit_code, status=status),
+            quiet=args.quiet,
+        )
+
+        # Close ledger connection
+        _record_corpus_db_safe(
+            "close ledger",
+            lambda: ledger.close(),
+            quiet=True,  # Don't warn on close failures
+        )
 
     # Display summary
     if not args.quiet:
