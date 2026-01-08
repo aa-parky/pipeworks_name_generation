@@ -15,6 +15,9 @@ Examples:
 
     # Generate batch of walks
     python -m build_tools.syllable_walk data.json --batch 50 --output walks.json
+
+    # Start interactive web interface
+    python -m build_tools.syllable_walk data.json --web
 """
 
 import argparse
@@ -24,6 +27,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from build_tools.syllable_walk.profiles import WALK_PROFILES
+from build_tools.syllable_walk.server import run_server
 from build_tools.syllable_walk.walker import SyllableWalker
 
 
@@ -80,6 +84,12 @@ Examples:
   # Custom walk parameters (overrides profile)
   python -m build_tools.syllable_walk data.json --start ka --steps 10 \\
       --max-flips 2 --temperature 1.5 --frequency-weight -0.8 --seed 42
+
+  # Start interactive web interface (opens on http://localhost:5000)
+  python -m build_tools.syllable_walk data.json --web
+
+  # Start web interface on custom port
+  python -m build_tools.syllable_walk data.json --web --port 8000
 
 For detailed documentation, see: claude/build_tools/syllable_walk.md
         """,
@@ -269,6 +279,20 @@ For detailed documentation, see: claude/build_tools/syllable_walk.md
         ),
     )
 
+    mode_group.add_argument(
+        "--web",
+        action="store_true",
+        help=(
+            "Start interactive web interface instead of command-line mode. "
+            "Launches a web server with a browser-based interface for "
+            "exploring walks interactively. All walk parameters can be "
+            "adjusted in the browser. The server runs until stopped with "
+            "Ctrl+C. Use --port to specify custom port (default: 5000). "
+            "Other CLI arguments are ignored in web mode. "
+            "Access at http://localhost:5000 after starting."
+        ),
+    )
+
     # Output options group
     output_group = parser.add_argument_group(
         "output options",
@@ -337,6 +361,22 @@ For detailed documentation, see: claude/build_tools/syllable_walk.md
             "Initialization time (500k syllables): ~30 sec (1), ~1 min (2), ~3 min (3). "
             "Memory impact: ~50MB (1), ~150MB (2), ~300MB (3). "
             "Default: 3 (recommended for maximum flexibility)"
+        ),
+    )
+
+    config_group.add_argument(
+        "--port",
+        type=int,
+        default=5000,
+        metavar="PORT",
+        help=(
+            "Port number for web server when using --web mode. Only applies "
+            "when --web flag is specified, otherwise ignored. Choose a port "
+            "that is not already in use by another service. Common alternatives: "
+            "8000, 8080, 3000. If the port is in use, the server will fail to "
+            "start with an error message. "
+            "Valid range: 1024-65535 (ports below 1024 require root/admin). "
+            "Default: 5000"
         ),
     )
 
@@ -583,6 +623,46 @@ def search_mode(walker: SyllableWalker, args: argparse.Namespace) -> int:
     return 0
 
 
+def web_mode(args: argparse.Namespace) -> int:
+    """
+    Handle web server mode.
+
+    Starts the interactive web interface for syllable walking. The server runs
+    until interrupted with Ctrl+C. Walker initialization happens inside run_server().
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        Exit code (0 = success, 1 = error)
+
+    Notes:
+        - This function calls run_server() which initializes the walker
+        - The server runs until stopped with Ctrl+C
+        - Any errors during initialization or server startup are caught
+    """
+    try:
+        # run_server handles walker initialization and server lifecycle
+        run_server(
+            data_path=args.data_file,
+            max_neighbor_distance=args.max_neighbor_distance,
+            port=args.port,
+            verbose=not args.quiet,
+        )
+        return 0
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"Error starting server: {e}", file=sys.stderr)
+        print(f"\nPort {args.port} may already be in use.", file=sys.stderr)
+        print("Try using a different port with --port option.", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+
 def main() -> int:
     """
     Main entry point for syllable walker CLI.
@@ -622,6 +702,10 @@ def main() -> int:
             )
             print("  python -m build_tools.syllable_feature_annotator", file=sys.stderr)
             return 1
+
+        # Handle web mode (doesn't need walker initialization here)
+        if args.web:
+            return web_mode(args)
 
         # Initialize walker
         if not args.quiet:

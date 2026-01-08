@@ -21,6 +21,8 @@ Tool Overview
      - 3-step normalization pipeline (aggregation, canonicalization, frequency analysis)
    * - :doc:`syllable_feature_annotator`
      - Phonetic feature detection (onset, nucleus, coda features)
+   * - :doc:`syllable_walk`
+     - Explore phonetic feature space via cost-based random walks
    * - :doc:`analysis_tools`
      - Post-annotation analysis (feature signatures, t-SNE visualization, random sampling)
 
@@ -45,6 +47,12 @@ Annotate syllables with phonetic features:
 
    python -m build_tools.syllable_feature_annotator
 
+Explore syllable walks (interactive):
+
+.. code-block:: bash
+
+   python -m build_tools.syllable_walk data/annotated/syllables_annotated.json --web
+
 Analyze and visualize:
 
 .. code-block:: bash
@@ -60,4 +68,5 @@ Detailed Documentation
    syllable_extractor
    syllable_normaliser
    syllable_feature_annotator
+   syllable_walk
    analysis_tools
