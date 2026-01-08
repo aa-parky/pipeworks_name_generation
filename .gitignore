@@ -252,3 +252,17 @@ _working/*
 # --------------------------------------------------
 data/annotated/
 data/normalized/
+
+# Raw extraction outputs - large corpus files
+# Exclude large .syllables files (can be regenerated)
+data/raw/**/*.syllables
+
+# Exclude large .meta files (can be regenerated)
+data/raw/**/*.meta
+
+# Database: commit by default (metadata), uncomment to ignore if too large
+# data/raw/syllable_extractor.db
+
+# Allow small test fixtures to be committed
+!data/raw/test_fixtures/
+!data/raw/**/.gitkeep
