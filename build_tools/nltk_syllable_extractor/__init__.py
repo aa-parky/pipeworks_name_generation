@@ -1,8 +1,8 @@
 """
 NLTK Syllable Extractor - Phonetically-Guided Syllable Extraction
 
-The NLTK syllable extractor uses CMU Pronouncing Dictionary with onset/coda principles
-for phonetically-guided orthographic syllabification.
+The NLTK syllable extractor uses CMU Pronouncing Dictionary (via cmudict pip package)
+with onset/coda principles for phonetically-guided orthographic syllabification.
 This is a **build-time tool only** - not used during runtime name generation.
 
 The tool supports two modes:

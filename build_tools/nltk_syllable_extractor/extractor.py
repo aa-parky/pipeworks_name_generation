@@ -1,8 +1,8 @@
 """
-Core NLTK-based syllable extraction functionality.
+Core CMUDict-based syllable extraction functionality.
 
 This module provides the NltkSyllableExtractor class for extracting syllables
-from text using NLTK's CMU Pronouncing Dictionary with phonetically-guided
+from text using CMU Pronouncing Dictionary with phonetically-guided
 orthographic syllabification based on onset/coda principles.
 """
 
@@ -12,19 +12,17 @@ from typing import Dict, Set
 
 # Optional dependency - only needed at runtime, not for documentation builds
 try:
-    import nltk
-    from nltk.corpus import cmudict
+    import cmudict
 
-    NLTK_AVAILABLE = True
+    CMUDICT_AVAILABLE = True
 except ImportError:
-    nltk = None  # type: ignore[assignment]
     cmudict = None  # type: ignore[assignment]
-    NLTK_AVAILABLE = False
+    CMUDICT_AVAILABLE = False
 
 
 class NltkSyllableExtractor:
     """
-    Extracts syllables from text using NLTK's CMU Pronouncing Dictionary.
+    Extracts syllables from text using CMU Pronouncing Dictionary.
 
     This class uses phonetic information from CMUDict to guide orthographic
     syllable splitting, respecting English phonotactic constraints via
@@ -119,29 +117,19 @@ class NltkSyllableExtractor:
             max_syllable_length: Maximum syllable length to include (default: 10)
 
         Raises:
-            ImportError: If nltk is not installed
+            ImportError: If cmudict is not installed
             ValueError: If the language code is not 'en_US'
-            LookupError: If CMUDict corpus is not downloaded
         """
-        if not NLTK_AVAILABLE:
+        if not CMUDICT_AVAILABLE:
             raise ImportError(
-                "nltk is not installed. This is a build-time dependency.\n"
-                "Install it with: pip install nltk"
+                "cmudict is not installed. This is a build-time dependency.\n"
+                "Install it with: pip install cmudict"
             )
 
         if language_code != "en_US":
             raise ValueError(
                 f"Language code '{language_code}' is not supported by nltk_syllable_extractor.\n"
                 "Only 'en_US' is supported (CMUDict limitation)."
-            )
-
-        # Ensure CMUDict is downloaded
-        try:
-            nltk.data.find("corpora/cmudict")
-        except LookupError:
-            raise LookupError(
-                "CMU Pronouncing Dictionary not found.\n"
-                "Download it with: python -m nltk.downloader cmudict"
             )
 
         self.language_code = language_code

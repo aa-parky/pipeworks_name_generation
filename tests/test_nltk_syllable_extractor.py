@@ -17,27 +17,19 @@ from build_tools.nltk_syllable_extractor import NltkSyllableExtractor
 def extractor():
     """Create a standard extractor instance for testing."""
     try:
-        import nltk
-
-        # Ensure CMUDict is available
-        try:
-            nltk.data.find("corpora/cmudict")
-        except LookupError:
-            pytest.skip("CMUDict corpus not available")
+        import cmudict  # noqa: F401
 
         return NltkSyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=8)
     except ImportError:
-        pytest.skip("NLTK not installed")
+        pytest.skip("cmudict not installed")
 
 
 def test_nltk_syllable_extractor_init():
     """Test extractor initialization."""
     try:
-        import nltk
-
-        nltk.data.find("corpora/cmudict")
-    except (ImportError, LookupError):
-        pytest.skip("NLTK or CMUDict not available")
+        import cmudict  # noqa: F401
+    except ImportError:
+        pytest.skip("cmudict not installed")
 
     # Valid initialization
     extractor = NltkSyllableExtractor("en_US", min_syllable_length=2, max_syllable_length=8)

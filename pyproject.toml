@@ -38,7 +38,7 @@ dev = [
     "build>=1.0",
     "pyphen>=0.14.0",
     "langdetect>=1.0.9",
-    "nltk>=3.8",
+    "cmudict>=1.0.0",
     "scikit-learn>=1.3.0",
     "matplotlib>=3.7.0",
     "numpy>=1.24.0",
@@ -56,7 +56,7 @@ dev = [
 build-tools = [
     "pyphen>=0.14.0",
     "langdetect>=1.0.9",
-    "nltk>=3.8",
+    "cmudict>=1.0.0",
     "scikit-learn>=1.3.0",
     "matplotlib>=3.7.0",
     "numpy>=1.24.0",
@@ -110,7 +110,7 @@ module = "numpy.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "nltk.*"
+module = "cmudict.*"
 ignore_missing_imports = true
 
 [tool.bandit]

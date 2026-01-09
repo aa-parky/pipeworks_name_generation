@@ -21,9 +21,6 @@ across sessions.
 python3.12 -m venv venv && source venv/bin/activate
 pip install -r requirements-dev.txt && pip install -e .
 
-# For NLTK extractor (one-time setup)
-python -m nltk.downloader cmudict
-
 # Run tests
 pytest
 

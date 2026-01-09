@@ -162,15 +162,11 @@ The NLTK extractor is **English-only** due to CMUDict constraints:
 - No support for other languages (use pyphen for multi-language needs)
 - This is a fundamental limitation of the phonetic dictionary approach
 
-**CMUDict Corpus Requirement:**
+**CMUDict Package:**
 
-On first use, you must download the CMUDict corpus:
-
-.. code-block:: bash
-
-   python -m nltk.downloader cmudict
-
-If the corpus is missing, the tool will display an error message with download instructions.
+The tool uses the ``cmudict`` pip package (python-cmudict) which includes the
+CMU Pronouncing Dictionary data. No separate corpus download is required - simply
+install via pip and you're ready to go.
 
 **Phonetic vs Typographic Splitting:**
 

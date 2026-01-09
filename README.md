@@ -86,15 +86,14 @@ python -m build_tools.syllable_normaliser --source _working/output/
 
 ### NLTK Extractor Setup
 
-The NLTK syllable extractor requires the CMU Pronouncing Dictionary corpus:
+The NLTK syllable extractor uses the CMU Pronouncing Dictionary:
 
 ```bash
-# Install build tools (includes nltk>=3.8)
+# Install build tools (includes cmudict pip package)
 pip install -e ".[build-tools]"
-
-# Download CMUDict corpus (one-time setup)
-python -m nltk.downloader cmudict
 ```
+
+No additional setup required - CMUDict data is included in the pip package!
 
 📖 **[Full Build Tools Documentation →](https://pipeworks-name-generation.readthedocs.io/en/latest/build_tools/index.html)**
 
