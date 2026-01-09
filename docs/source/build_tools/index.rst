@@ -17,6 +17,8 @@ Tool Overview
      - Description
    * - :doc:`syllable_extractor`
      - Dictionary-based syllable extraction using pyphen (LibreOffice dictionaries)
+   * - :doc:`nltk_syllable_extractor`
+     - Phonetically-guided syllable extraction using NLTK CMUDict with onset/coda principles
    * - :doc:`syllable_normaliser`
      - 3-step normalization pipeline (aggregation, canonicalization, frequency analysis)
    * - :doc:`syllable_feature_annotator`
@@ -35,10 +37,15 @@ Quick Start
 
 .. code-block:: bash
 
-   # Extract syllables from text
+   # Extract syllables from text (choose one extractor)
+
+   # Option 1: pyphen extractor (40+ languages, typographic splits)
    python -m build_tools.syllable_extractor --file input.txt --auto
 
-   # Normalize extracted syllables
+   # Option 2: NLTK extractor (English only, phonetic splits)
+   python -m build_tools.nltk_syllable_extractor --file input.txt
+
+   # Normalize extracted syllables (works with either extractor)
    python -m build_tools.syllable_normaliser --source data/corpus/ --output results/
 
    # Annotate syllables with phonetic features
@@ -57,6 +64,7 @@ Detailed Documentation
    :maxdepth: 2
 
    syllable_extractor
+   nltk_syllable_extractor
    syllable_normaliser
    syllable_feature_annotator
    syllable_walk
