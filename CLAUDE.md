@@ -21,6 +21,9 @@ across sessions.
 python3.12 -m venv venv && source venv/bin/activate
 pip install -r requirements-dev.txt && pip install -e .
 
+# For NLTK extractor (one-time setup)
+python -m nltk.downloader cmudict
+
 # Run tests
 pytest
 
@@ -32,13 +35,18 @@ pre-commit run --all-files
 ### Build Tools
 
 ```bash
-# Extract syllables
+# Extract syllables (choose one extractor)
+
+# Option 1: pyphen (40+ languages, typographic hyphenation)
 python -m build_tools.syllable_extractor --file input.txt --auto
 
-# Normalize syllables
+# Option 2: NLTK (English only, phonetic splits with onset/coda)
+python -m build_tools.nltk_syllable_extractor --file input.txt
+
+# Normalize syllables (works with either extractor)
 python -m build_tools.syllable_normaliser --source data/corpus/ --output _working/normalized/
 
-# Annotate with features
+# Annotate with features (source-agnostic)
 python -m build_tools.syllable_feature_annotator
 ```
 
@@ -59,7 +67,8 @@ Detailed documentation is organized in the `claude/` directory:
 ### Build Tool Documentation
 
 - **[Syllable Extractor](claude/build_tools/syllable_extractor.md)** - Dictionary-based syllable
-  extraction (pyphen)
+  extraction (pyphen, 40+ languages)
+- **[NLTK Syllable Extractor]** - Phonetically-guided syllable extraction (CMUDict + onset/coda, English only)
 - **[Syllable Normaliser](claude/build_tools/syllable_normaliser.md)** - 3-step normalization
   pipeline
 - **[Feature Annotator](claude/build_tools/feature_annotator.md)** - Phonetic feature detection
