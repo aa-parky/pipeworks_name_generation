@@ -25,6 +25,8 @@ Tool Overview
      - Explore phonetic feature space via cost-based random walks
    * - :doc:`corpus_db`
      - Build provenance ledger for tracking extraction runs (inputs, outputs, settings)
+   * - :doc:`corpus_db_viewer`
+     - Interactive TUI for viewing corpus database provenance records
    * - :doc:`analysis_tools`
      - Post-annotation analysis (feature signatures, t-SNE visualization, random sampling)
 
@@ -72,4 +74,5 @@ Detailed Documentation
    syllable_feature_annotator
    syllable_walk
    corpus_db
+   corpus_db_viewer
    analysis_tools
