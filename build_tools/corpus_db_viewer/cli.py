@@ -23,40 +23,55 @@ def create_argument_parser() -> argparse.ArgumentParser:
         description="Interactive TUI for viewing corpus database provenance records",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Launch viewer with default database
-  python -m build_tools.corpus_db_viewer
+Examples
+========
 
-  # Specify custom database path
-  python -m build_tools.corpus_db_viewer --db /path/to/database.db
+.. code-block:: bash
 
-  # Set custom export directory
-  python -m build_tools.corpus_db_viewer --export-dir _working/my_exports/
+   # Launch viewer with default database
+   python -m build_tools.corpus_db_viewer
 
-Keyboard Shortcuts (in TUI):
-  ↑/↓         Navigate rows
-  ←/→         Previous/Next page
-  PageUp/Dn   Jump pages
-  Home/End    First/Last page
+   # Specify custom database path
+   python -m build_tools.corpus_db_viewer --db /path/to/database.db
 
-  t           Switch table (table selector)
-  i           Show schema info
-  e           Export current view
-  r           Refresh data
+   # Set custom export directory
+   python -m build_tools.corpus_db_viewer --export-dir _working/my_exports/
 
-  q           Quit application
-  ?           Show help screen
+Keyboard Shortcuts (in TUI)
+============================
 
-Navigation:
-  - Use arrow keys to navigate through table data
-  - Press 't' to open table selector and choose a different table
-  - Press 'i' to view detailed schema information
-  - Press 'e' to export the current table or view to CSV/JSON
+Navigation
+----------
 
-Export:
-  - Exports are saved to the export directory (default: _working/exports/)
-  - Files are named: <table_name>_<timestamp>.<format>
-  - Both CSV and JSON formats are supported
+- **↑/↓**: Navigate rows
+- **←/→**: Previous/Next page
+- **PageUp/Dn**: Jump pages
+- **Home/End**: First/Last page
+
+Actions
+-------
+
+- **t**: Switch table (table selector)
+- **i**: Show schema info
+- **e**: Export current view
+- **r**: Refresh data
+- **q**: Quit application
+- **?**: Show help screen
+
+Usage Notes
+-----------
+
+- Use arrow keys to navigate through table data
+- Press 't' to open table selector and choose a different table
+- Press 'i' to view detailed schema information
+- Press 'e' to export the current table or view to CSV/JSON
+
+Export Notes
+------------
+
+- Exports are saved to the export directory (default: _working/exports/)
+- Files are named: <table_name>_<timestamp>.<format>
+- Both CSV and JSON formats are supported
         """,
     )
 

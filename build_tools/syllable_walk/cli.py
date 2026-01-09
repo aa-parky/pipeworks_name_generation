@@ -65,31 +65,35 @@ def create_argument_parser() -> argparse.ArgumentParser:
         description="Explore syllable feature space via cost-based random walks",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Generate a single walk with default profile (dialect)
-  python -m build_tools.syllable_walk data.json --start ka
+Examples
+========
 
-  # Use specific profile
-  python -m build_tools.syllable_walk data.json --start bak --profile goblin --steps 10
+.. code-block:: bash
 
-  # Compare all profiles from same starting point
-  python -m build_tools.syllable_walk data.json --start ka --compare-profiles
+   # Generate a single walk with default profile (dialect)
+   python -m build_tools.syllable_walk data.json --start ka
 
-  # Generate batch of 50 walks and save to JSON
-  python -m build_tools.syllable_walk data.json --batch 50 --profile ritual --output walks.json
+   # Use specific profile
+   python -m build_tools.syllable_walk data.json --start bak --profile goblin --steps 10
 
-  # Search for syllables containing "th"
-  python -m build_tools.syllable_walk data.json --search "th"
+   # Compare all profiles from same starting point
+   python -m build_tools.syllable_walk data.json --start ka --compare-profiles
 
-  # Custom walk parameters (overrides profile)
-  python -m build_tools.syllable_walk data.json --start ka --steps 10 \\
-      --max-flips 2 --temperature 1.5 --frequency-weight -0.8 --seed 42
+   # Generate batch of 50 walks and save to JSON
+   python -m build_tools.syllable_walk data.json --batch 50 --profile ritual --output walks.json
 
-  # Start interactive web interface (opens on http://localhost:5000)
-  python -m build_tools.syllable_walk data.json --web
+   # Search for syllables containing "th"
+   python -m build_tools.syllable_walk data.json --search "th"
 
-  # Start web interface on custom port
-  python -m build_tools.syllable_walk data.json --web --port 8000
+   # Custom walk parameters (overrides profile)
+   python -m build_tools.syllable_walk data.json --start ka --steps 10 \\
+       --max-flips 2 --temperature 1.5 --frequency-weight -0.8 --seed 42
+
+   # Start interactive web interface (opens on http://localhost:5000)
+   python -m build_tools.syllable_walk data.json --web
+
+   # Start web interface on custom port
+   python -m build_tools.syllable_walk data.json --web --port 8000
 
 For detailed documentation, see: claude/build_tools/syllable_walk.md
         """,

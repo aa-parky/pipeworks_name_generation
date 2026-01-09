@@ -39,6 +39,7 @@ Installation:
 
 .. code-block:: bash
 
+   # Install from PyPI
    pip install pipeworks-name-generation
 
 Basic usage:
@@ -64,6 +65,7 @@ Extract syllables from text corpora:
 
 .. code-block:: bash
 
+   # Run syllable extractor in interactive mode
    python -m build_tools.syllable_extractor
 
 Features tab completion for paths and supports 50+ languages via pyphen.

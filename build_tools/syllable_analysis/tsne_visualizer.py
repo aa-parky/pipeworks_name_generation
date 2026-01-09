@@ -289,26 +289,30 @@ def create_argument_parser() -> argparse.ArgumentParser:
         description="Generate t-SNE visualization of feature signature space",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Generate visualization with default settings
-  python -m build_tools.syllable_analysis.tsne_visualizer
+Examples
+========
 
-  # Custom input/output paths
-  python -m build_tools.syllable_analysis.tsne_visualizer \\
-    --input data/annotated/syllables_annotated.json \\
-    --output _working/analysis/tsne/
+.. code-block:: bash
 
-  # Adjust t-SNE parameters
-  python -m build_tools.syllable_analysis.tsne_visualizer \\
-    --perplexity 50 \\
-    --random-state 123
+   # Generate visualization with default settings
+   python -m build_tools.syllable_analysis.tsne_visualizer
 
-  # High-resolution output
-  python -m build_tools.syllable_analysis.tsne_visualizer \\
-    --dpi 600
+   # Custom input/output paths
+   python -m build_tools.syllable_analysis.tsne_visualizer \\
+     --input data/annotated/syllables_annotated.json \\
+     --output _working/analysis/tsne/
 
-  # Verbose output
-  python -m build_tools.syllable_analysis.tsne_visualizer --verbose
+   # Adjust t-SNE parameters
+   python -m build_tools.syllable_analysis.tsne_visualizer \\
+     --perplexity 50 \\
+     --random-state 123
+
+   # High-resolution output
+   python -m build_tools.syllable_analysis.tsne_visualizer \\
+     --dpi 600
+
+   # Verbose output
+   python -m build_tools.syllable_analysis.tsne_visualizer --verbose
         """,
     )
 

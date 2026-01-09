@@ -202,25 +202,31 @@ def create_argument_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Process all .txt files in a directory
-  python -m build_tools.syllable_normaliser --source data/corpus/ --output _working/normalized/
+Examples
+========
 
-  # Recursive directory scan
-  python -m build_tools.syllable_normaliser --source data/ --recursive --output results/
+.. code-block:: bash
 
-  # Custom syllable length constraints
-  python -m build_tools.syllable_normaliser --source data/ --min 3 --max 10
+   # Process all .txt files in a directory
+   python -m build_tools.syllable_normaliser --source data/corpus/ --output _working/normalized/
 
-  # Verbose output with detailed statistics
-  python -m build_tools.syllable_normaliser --source data/ --verbose
+   # Recursive directory scan
+   python -m build_tools.syllable_normaliser --source data/ --recursive --output results/
 
-Output Files:
-  syllables_raw.txt              - Aggregated raw syllables (all occurrences)
-  syllables_canonicalised.txt    - Normalized canonical syllables
-  syllables_frequencies.json     - Frequency intelligence (syllable → count)
-  syllables_unique.txt           - Deduplicated canonical syllable inventory
-  normalization_meta.txt         - Detailed statistics and metadata report
+   # Custom syllable length constraints
+   python -m build_tools.syllable_normaliser --source data/ --min 3 --max 10
+
+   # Verbose output with detailed statistics
+   python -m build_tools.syllable_normaliser --source data/ --verbose
+
+Output Files
+============
+
+- **syllables_raw.txt**: Aggregated raw syllables (all occurrences)
+- **syllables_canonicalised.txt**: Normalized canonical syllables
+- **syllables_frequencies.json**: Frequency intelligence (syllable → count)
+- **syllables_unique.txt**: Deduplicated canonical syllable inventory
+- **normalization_meta.txt**: Detailed statistics and metadata report
         """,
     )
 

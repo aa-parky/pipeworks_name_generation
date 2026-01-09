@@ -226,17 +226,21 @@ def create_argument_parser() -> argparse.ArgumentParser:
         description="Analyze feature signatures in annotated syllable corpus",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Analyze with default paths
-  python -m build_tools.syllable_analysis.feature_signatures
+Examples
+========
 
-  # Show only top 50 signatures
-  python -m build_tools.syllable_analysis.feature_signatures --limit 50
+.. code-block:: bash
 
-  # Custom input/output paths
-  python -m build_tools.syllable_analysis.feature_signatures \\
-    --input data/annotated/syllables_annotated.json \\
-    --output _working/my_analysis/
+   # Analyze with default paths
+   python -m build_tools.syllable_analysis.feature_signatures
+
+   # Show only top 50 signatures
+   python -m build_tools.syllable_analysis.feature_signatures --limit 50
+
+   # Custom input/output paths
+   python -m build_tools.syllable_analysis.feature_signatures \\
+     --input data/annotated/syllables_annotated.json \\
+     --output _working/my_analysis/
         """,
     )
 

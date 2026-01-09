@@ -33,34 +33,21 @@ Tool Overview
 Quick Start
 -----------
 
-Extract syllables from text:
-
 .. code-block:: bash
 
+   # Extract syllables from text
    python -m build_tools.syllable_extractor --file input.txt --auto
 
-Normalize extracted syllables:
-
-.. code-block:: bash
-
+   # Normalize extracted syllables
    python -m build_tools.syllable_normaliser --source data/corpus/ --output results/
 
-Annotate syllables with phonetic features:
-
-.. code-block:: bash
-
+   # Annotate syllables with phonetic features
    python -m build_tools.syllable_feature_annotator
 
-Explore syllable walks (interactive):
-
-.. code-block:: bash
-
+   # Explore syllable walks (interactive)
    python -m build_tools.syllable_walk data/annotated/syllables_annotated.json --web
 
-Analyze and visualize:
-
-.. code-block:: bash
-
+   # Analyze and visualize
    python -m build_tools.syllable_analysis.tsne_visualizer --interactive
 
 Detailed Documentation

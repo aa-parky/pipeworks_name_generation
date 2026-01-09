@@ -88,21 +88,25 @@ def create_argument_parser() -> argparse.ArgumentParser:
         description="Randomly sample annotated syllables for inspection.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Sample 100 syllables (default)
-  python -m build_tools.syllable_analysis.random_sampler
+Examples
+========
 
-  # Sample 50 syllables
-  python -m build_tools.syllable_analysis.random_sampler --samples 50
+.. code-block:: bash
 
-  # Use custom paths
-  python -m build_tools.syllable_analysis.random_sampler \\
-      --input data/annotated/syllables_annotated.json \\
-      --output _working/my_samples.json \\
-      --samples 200
+   # Sample 100 syllables (default)
+   python -m build_tools.syllable_analysis.random_sampler
 
-  # Use a specific seed for reproducibility
-  python -m build_tools.syllable_analysis.random_sampler --samples 50 --seed 42
+   # Sample 50 syllables
+   python -m build_tools.syllable_analysis.random_sampler --samples 50
+
+   # Use custom paths
+   python -m build_tools.syllable_analysis.random_sampler \\
+       --input data/annotated/syllables_annotated.json \\
+       --output _working/my_samples.json \\
+       --samples 200
+
+   # Use a specific seed for reproducibility
+   python -m build_tools.syllable_analysis.random_sampler --samples 50 --seed 42
         """,
     )
 

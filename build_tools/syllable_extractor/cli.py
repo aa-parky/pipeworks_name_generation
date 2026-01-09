@@ -531,24 +531,28 @@ def create_argument_parser() -> argparse.ArgumentParser:
         description="Syllable Extractor - Extract syllables from text using pyphen hyphenation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Interactive mode (no arguments)
-  python -m build_tools.syllable_extractor
+Examples
+========
 
-  # Single file
-  python -m build_tools.syllable_extractor --file input.txt --lang en_US
+.. code-block:: bash
 
-  # Multiple files
-  python -m build_tools.syllable_extractor --files file1.txt file2.txt file3.txt --auto
+   # Interactive mode (no arguments)
+   python -m build_tools.syllable_extractor
 
-  # Directory scan (non-recursive)
-  python -m build_tools.syllable_extractor --source /data/texts/ --pattern "*.txt"
+   # Single file
+   python -m build_tools.syllable_extractor --file input.txt --lang en_US
 
-  # Directory scan (recursive)
-  python -m build_tools.syllable_extractor --source /data/ --pattern "*.md" --recursive
+   # Multiple files
+   python -m build_tools.syllable_extractor --files file1.txt file2.txt file3.txt --auto
 
-  # Custom output directory and syllable lengths
-  python -m build_tools.syllable_extractor --source /data/ --output /results/ --min 3 --max 6
+   # Directory scan (non-recursive)
+   python -m build_tools.syllable_extractor --source /data/texts/ --pattern "*.txt"
+
+   # Directory scan (recursive)
+   python -m build_tools.syllable_extractor --source /data/ --pattern "*.md" --recursive
+
+   # Custom output directory and syllable lengths
+   python -m build_tools.syllable_extractor --source /data/ --output /results/ --min 3 --max 6
 """,
     )
 

@@ -169,6 +169,7 @@ Generate many walks to see how syllables connect:
 
 .. code-block:: bash
 
+   # Generate 100 walks for corpus analysis
    python -m build_tools.syllable_walk data.json --batch 100 --output corpus_walks.json
 
 Analyze the JSON output to understand syllable connectivity, central hubs, and phonetic pathways.
@@ -180,6 +181,7 @@ Explore if desired phonetic transitions exist before creating new patterns:
 
 .. code-block:: bash
 
+   # Test phonetic transitions with ritual profile
    python -m build_tools.syllable_walk data.json --start the --profile ritual
 
 Finding Interesting Sequences
@@ -189,6 +191,7 @@ Discover unusual but valid phonetic progressions:
 
 .. code-block:: bash
 
+   # Explore unusual sequences with goblin profile
    python -m build_tools.syllable_walk data.json --profile goblin --steps 10
 
 Statistical Analysis
@@ -198,10 +201,11 @@ Generate large datasets for analysis:
 
 .. code-block:: bash
 
-   # Generate 1000 walks with different profiles
+   # Generate 1000 walks with dialect profile
    python -m build_tools.syllable_walk data.json --batch 1000 \\
      --profile dialect --output dialect_walks.json
 
+   # Generate 1000 walks with goblin profile
    python -m build_tools.syllable_walk data.json --batch 1000 \\
      --profile goblin --output goblin_walks.json
 
@@ -455,7 +459,7 @@ Port Already in Use (Web Mode)
 
 .. code-block:: bash
 
-   # Try a different port
+   # Use a different port if 5000 is occupied
    python -m build_tools.syllable_walk data.json --web --port 8000
 
 Notes

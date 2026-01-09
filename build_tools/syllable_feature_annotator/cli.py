@@ -196,18 +196,22 @@ def create_argument_parser() -> argparse.ArgumentParser:
         description="Annotate syllables with phonetic feature detection",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Annotate with default paths (normalizer output)
-  python -m build_tools.syllable_feature_annotator
+Examples
+========
 
-  # Annotate with custom paths
-  python -m build_tools.syllable_feature_annotator \\
-    --syllables data/normalized/syllables_unique.txt \\
-    --frequencies data/normalized/syllables_frequencies.json \\
-    --output data/annotated/syllables_annotated.json
+.. code-block:: bash
 
-  # Enable verbose output
-  python -m build_tools.syllable_feature_annotator --verbose
+   # Annotate with default paths (normalizer output)
+   python -m build_tools.syllable_feature_annotator
+
+   # Annotate with custom paths
+   python -m build_tools.syllable_feature_annotator \\
+     --syllables data/normalized/syllables_unique.txt \\
+     --frequencies data/normalized/syllables_frequencies.json \\
+     --output data/annotated/syllables_annotated.json
+
+   # Enable verbose output
+   python -m build_tools.syllable_feature_annotator --verbose
 
 For more information, see the documentation in CLAUDE.md
         """,

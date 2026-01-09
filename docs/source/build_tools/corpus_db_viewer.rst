@@ -229,6 +229,7 @@ Database Not Found
 
 .. code-block:: bash
 
+   # Specify custom database path
    python -m build_tools.corpus_db_viewer --db /path/to/database.db
 
 Textual Not Installed
@@ -242,6 +243,7 @@ Textual Not Installed
 
 .. code-block:: bash
 
+   # Install development dependencies
    pip install -r requirements-dev.txt
 
 Terminal Too Small
