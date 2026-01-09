@@ -23,7 +23,7 @@ Output Format
 
 Output files are saved to ``_working/output/`` with timestamped names including language codes:
 
-- ``YYYYMMDD_HHMMSS.syllables.en_US.txt`` - Unique syllables (one per line, sorted)
+- ``YYYYMMDD_HHMMSS.syllables.en_US.txt`` - All syllables (one per line, preserves duplicates)
 - ``YYYYMMDD_HHMMSS.meta.en_US.txt`` - Extraction metadata and statistics
 
 **Examples:**
@@ -35,19 +35,21 @@ Output files are saved to ``_working/output/`` with timestamped names including 
 
 **Syllables file format:**
 
-Each line contains one unique syllable, sorted alphabetically:
+Each line contains one syllable, preserving duplicates in the order extracted. This preserves natural syllable frequency for downstream processing:
 
 ::
 
-    an
-    beau
-    der
-    drew
-    ful
     hel
     lo
     won
+    der
+    ful
     world
+    hel
+    lo
+    world
+
+**Note:** Duplicates are intentionally preserved. The extractor's job is to extract, not to filter. Use ``build_tools.syllable_normaliser`` for deduplication and frequency analysis.
 
 **Metadata file format:**
 
@@ -57,9 +59,10 @@ The metadata file records extraction parameters and statistics:
 - Language code (always ``en_US`` for NLTK extractor)
 - Extractor type (``nltk_syllable_extractor (CMUDict + onset/coda)``)
 - Syllable length constraints (min/max)
-- Unique syllable count
+- Total syllables (with duplicates)
+- Unique syllable count (for reference)
 - Total word count
-- Processing statistics (processed words, skipped words, rejected syllables)
+- Processing statistics (processed words, fallback count, rejected syllables)
 - Extraction timestamp
 - Command-line invocation
 
@@ -72,9 +75,18 @@ The NLTK extractor clearly labels its output to distinguish from pyphen-based ex
     ======================================================================
     NLTK SYLLABLE EXTRACTION METADATA
     ======================================================================
-    Extraction Date:    2026-01-09 19:29:21
+    Extraction Date:    2026-01-09 22:43:28
     Extractor:          nltk_syllable_extractor (CMUDict + onset/coda)
     Language Code:      en_US
+    Syllable Length:    1-999 characters
+    Total Syllables:    911
+    Unique Syllables:   401
+
+    Processing Statistics:
+      Total Words:        503
+      Processed Words:    503
+      Fallback Used:      17 (not in CMUDict)
+      Rejected Syllables: 0 (length filter)
     ...
 
 Integration Guide
@@ -205,12 +217,32 @@ Words not in CMUDict use a heuristic fallback:
 2. Applies onset/coda principles to consonant clusters
 3. Maintains phonetic character even for out-of-vocabulary words
 
+Fallback usage is tracked in metadata as "Fallback Used: N (not in CMUDict)" to clearly distinguish from CMUDict-based extraction.
+
+**Extraction Philosophy - Preserving Duplicates:**
+
+The extractor preserves all syllables including duplicates, following separation-of-concerns design:
+
+- **Extractor's job**: Extract syllables (preserves frequency information)
+- **Normaliser's job**: Deduplicate, filter, aggregate (``syllable_normaliser``)
+- **Annotator's job**: Add phonetic features (``syllable_feature_annotator``)
+
+This design allows downstream tools to:
+
+- Perform frequency analysis on natural corpus distribution
+- Make informed filtering decisions based on occurrence counts
+- Apply different normalization strategies for different use cases
+
 **Syllable Length Constraints:**
 
-- Default: min=2, max=8 characters
-- Adjust with ``--min`` and ``--max`` flags
-- Shorter syllables (min=1) include single vowels
-- Longer syllables (max=10+) may include compound patterns
+- Default: min=1, max=999 (no practical filtering by default)
+- Adjust with ``--min`` and ``--max`` flags to filter if needed
+- Default behavior preserves all syllables for downstream processing
+- Examples:
+
+  - ``--min 2 --max 8`` - Filter to 2-8 character syllables (like old default)
+  - ``--min 1 --max 1`` - Extract only single-character syllables
+  - ``--min 3`` - Extract syllables of 3+ characters (no upper limit)
 
 **Output Organization:**
 
