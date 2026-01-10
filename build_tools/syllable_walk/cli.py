@@ -99,15 +99,18 @@ For detailed documentation, see: claude/build_tools/syllable_walk.md
         """,
     )
 
-    # Required positional argument
+    # Optional positional argument (required for CLI modes, optional for web mode)
     parser.add_argument(
         "data_file",
+        nargs="?",  # Make optional
         type=Path,
         help=(
             "Path to syllables_annotated.json file (output of "
             "syllable_feature_annotator). This file contains syllables with "
             "phonetic features and frequency information. "
-            "Example: data/annotated/syllables_annotated.json"
+            "Example: data/annotated/syllables_annotated.json. "
+            "Optional in --web mode: if not specified, auto-discovers the most recent "
+            "dataset from _working/output/ directories."
         ),
     )
 
@@ -697,6 +700,24 @@ def main() -> int:
             )
             return 2
 
+        # Handle web mode early (may not need data_file)
+        if args.web:
+            # data_file is optional in web mode (will auto-discover)
+            return web_mode(args)
+
+        # For CLI modes, data_file is required
+        if not args.data_file:
+            print("Error: data_file is required for CLI mode", file=sys.stderr)
+            print(
+                "\nUsage: python -m build_tools.syllable_walk <data_file> [options]",
+                file=sys.stderr,
+            )
+            print(
+                "\nFor web mode with auto-discovery, use: python -m build_tools.syllable_walk --web",
+                file=sys.stderr,
+            )
+            return 1
+
         # Validate data file exists
         if not args.data_file.exists():
             print(f"Error: Data file not found: {args.data_file}", file=sys.stderr)
@@ -706,10 +727,6 @@ def main() -> int:
             )
             print("  python -m build_tools.syllable_feature_annotator", file=sys.stderr)
             return 1
-
-        # Handle web mode (doesn't need walker initialization here)
-        if args.web:
-            return web_mode(args)
 
         # Initialize walker
         if not args.quiet:

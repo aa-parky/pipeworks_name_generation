@@ -26,6 +26,17 @@ HTML_TEMPLATE = """
             <p>Explore phonetic feature space through cost-based random walks</p>
         </div>
 
+        <div class="dataset-selector">
+            <div class="dataset-label">Dataset:</div>
+            <select id="dataset-select" onchange="loadDataset()">
+                <option value="">Loading datasets...</option>
+            </select>
+            <div id="dataset-loading" class="dataset-loading" style="display: none;">
+                <div class="mini-spinner"></div>
+                <span>Switching dataset...</span>
+            </div>
+        </div>
+
         <div class="stats">
             <div class="stat">
                 <div class="stat-value" id="total-syllables">-</div>
@@ -113,6 +124,8 @@ HTML_TEMPLATE = """
 
     <script>
         let walkCount = 0;
+        let availableDatasets = [];
+        let currentDatasetPath = null;
 
         const profileDescriptions = {
             clerical: "Conservative, favors common syllables, minimal phonetic change",
@@ -129,13 +142,111 @@ HTML_TEMPLATE = """
             ritual: { steps: 5, max_flips: 3, temperature: 2.5, frequency_weight: -1.0 }
         };
 
-        // Load initial stats
-        fetch('/api/stats')
-            .then(r => r.json())
-            .then(data => {
+        // Load available datasets
+        async function loadAvailableDatasets() {
+            try {
+                const response = await fetch('/api/datasets');
+                const data = await response.json();
+
+                availableDatasets = data.datasets;
+                currentDatasetPath = data.current;
+
+                const select = document.getElementById('dataset-select');
+                select.innerHTML = '';
+
+                if (availableDatasets.length === 0) {
+                    select.innerHTML = '<option value="">No datasets found</option>';
+                    return;
+                }
+
+                availableDatasets.forEach(dataset => {
+                    const option = document.createElement('option');
+                    option.value = dataset.path;
+                    option.textContent = dataset.name;
+                    if (dataset.path === currentDatasetPath) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+
+                // Load stats for current dataset
+                loadStats();
+            } catch (error) {
+                console.error('Error loading datasets:', error);
+                document.getElementById('dataset-select').innerHTML =
+                    '<option value="">Error loading datasets</option>';
+            }
+        }
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
                 document.getElementById('total-syllables').textContent =
                     data.total_syllables.toLocaleString();
-            });
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Load a different dataset
+        async function loadDataset() {
+            const select = document.getElementById('dataset-select');
+            const newPath = select.value;
+
+            if (!newPath || newPath === currentDatasetPath) {
+                return;
+            }
+
+            const loadingIndicator = document.getElementById('dataset-loading');
+            const generateBtn = document.getElementById('generate-btn');
+
+            try {
+                // Show loading indicator
+                loadingIndicator.style.display = 'flex';
+                generateBtn.disabled = true;
+
+                const response = await fetch('/api/load-dataset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: newPath })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    alert('Error loading dataset: ' + data.error);
+                    // Revert selection
+                    select.value = currentDatasetPath;
+                } else {
+                    // Update current path
+                    currentDatasetPath = newPath;
+
+                    // Update stats
+                    document.getElementById('total-syllables').textContent =
+                        data.total_syllables.toLocaleString();
+
+                    // Reset walk count
+                    walkCount = 0;
+                    document.getElementById('total-walks').textContent = '0';
+
+                    // Clear output
+                    document.getElementById('walk-output').innerHTML =
+                        '<div class="loading"><p>Dataset loaded! Click "Generate Walk" to begin exploring</p></div>';
+                }
+            } catch (error) {
+                console.error('Error switching dataset:', error);
+                alert('Error switching dataset: ' + error.message);
+                select.value = currentDatasetPath;
+            } finally {
+                loadingIndicator.style.display = 'none';
+                generateBtn.disabled = false;
+            }
+        }
+
+        // Initialize on page load
+        loadAvailableDatasets();
 
         // Profile change handler
         document.getElementById('profile').addEventListener('change', function() {
@@ -286,6 +397,64 @@ body {
 .header p {
     font-size: 1.05em;
     color: #b8bcc6;
+}
+
+/* ========================================
+   DATASET SELECTOR
+   ======================================== */
+.dataset-selector {
+    background: #1b1f2a;
+    padding: 20px 30px;
+    border-bottom: 1px solid #262b38;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.dataset-label {
+    font-weight: 600;
+    color: #cfd3dc;
+    font-size: 0.95em;
+    min-width: 70px;
+}
+
+.dataset-selector select {
+    flex: 1;
+    padding: 10px 15px;
+    background: #0f1218;
+    border: 1px solid #2b3142;
+    border-radius: 6px;
+    font-size: 0.95em;
+    color: #e6e8ee;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.dataset-selector select:hover {
+    border-color: #9aa4ff;
+}
+
+.dataset-selector select:focus {
+    outline: none;
+    border-color: #9aa4ff;
+    background: #121623;
+}
+
+.dataset-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #9aa4ff;
+    font-size: 0.9em;
+}
+
+.mini-spinner {
+    border: 2px solid #2b3142;
+    border-top: 2px solid #9aa4ff;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    animation: spin 0.8s linear infinite;
 }
 
 /* ========================================
