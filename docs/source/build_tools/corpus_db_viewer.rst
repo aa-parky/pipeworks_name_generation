@@ -291,7 +291,8 @@ This is a build-time inspection tool - not used during runtime name generation.
 **Related Documentation:**
 
 - :doc:`corpus_db` - Build provenance ledger that this tool reads
-- :doc:`syllable_extractor` - Main tool that populates the database
+- :doc:`pyphen_syllable_extractor` - Pyphen tool that populates the database
+- :doc:`nltk_syllable_extractor` - NLTK tool that populates the database
 
 API Reference
 -------------

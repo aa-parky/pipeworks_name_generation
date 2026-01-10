@@ -1,6 +1,6 @@
-===================
-Syllable Normaliser
-===================
+==========================
+Pyphen Syllable Normaliser
+==========================
 
 .. currentmodule:: build_tools.pyphen_syllable_normaliser
 

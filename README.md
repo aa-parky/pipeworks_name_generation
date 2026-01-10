@@ -63,9 +63,10 @@ assert gen.generate(seed=42) == name
 
 The project includes a comprehensive suite of build-time tools for corpus linguistics:
 
-- **Syllable Extractor** - Dictionary-based extraction using pyphen (40+ languages).
+- **Pyphen Syllable Extractor** - Dictionary-based extraction using pyphen (40+ languages).
 - **NLTK Syllable Extractor** - Phonetically-guided extraction using CMU Pronouncing Dictionary (English only).
-- **Syllable Normaliser** - A 3-step pipeline for canonicalization and frequency analysis.
+- **Pyphen Syllable Normaliser** - A 3-step pipeline for canonicalization and frequency analysis.
+- **NLTK Syllable Normaliser** - NLTK-specific normalization with fragment cleaning.
 - **Syllable Feature Annotator** - Phonetic feature detection (e.g., onsets, codas).
 - **Syllable Walker** - Interactive exploration of the phonetic feature space.
 - **Corpus Database** - A build provenance ledger for tracking extraction runs.

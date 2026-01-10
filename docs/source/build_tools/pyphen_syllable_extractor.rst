@@ -1,6 +1,6 @@
-==================
-Syllable Extractor
-==================
+========================
+Pyphen Syllable Extractor
+========================
 
 .. currentmodule:: build_tools.pyphen_syllable_extractor
 
