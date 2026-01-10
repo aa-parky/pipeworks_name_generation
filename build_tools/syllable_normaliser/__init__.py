@@ -33,20 +33,15 @@ Usage:
     >>> from pathlib import Path
     >>> from build_tools.syllable_normaliser import (
     ...     NormalizationConfig,
-    ...     run_full_pipeline,
-    ...     discover_input_files
+    ...     run_full_pipeline
     ... )
-    >>>
-    >>> # Discover input files
-    >>> files = discover_input_files(Path("data/corpus/"), pattern="*.txt")
     >>>
     >>> # Create configuration
     >>> config = NormalizationConfig(min_length=2, max_length=8)
     >>>
-    >>> # Run pipeline
+    >>> # Run pipeline on a pyphen run directory
     >>> result = run_full_pipeline(
-    ...     input_files=files,
-    ...     output_dir=Path("_working/normalized"),
+    ...     run_directory=Path("_working/output/20260110_143022_pyphen/"),
     ...     config=config,
     ...     verbose=True
     ... )
@@ -60,11 +55,11 @@ CLI Usage:
 
     .. code-block:: bash
 
-       # Full pipeline with default settings
-       python -m build_tools.syllable_normaliser --source data/corpus/ --output _working/normalized/
+       # Process specific pyphen run directory (in-place)
+       python -m build_tools.syllable_normaliser --run-dir _working/output/20260110_143022_pyphen/
 
-       # Custom length constraints
-       python -m build_tools.syllable_normaliser --source data/ --min 3 --max 6
+       # Auto-detect all pyphen run directories
+       python -m build_tools.syllable_normaliser --source _working/output/
 """
 
 # File aggregation

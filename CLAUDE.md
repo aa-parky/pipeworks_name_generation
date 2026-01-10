@@ -40,18 +40,18 @@ python -m build_tools.syllable_extractor --file input.txt --auto
 # Option 2: NLTK (English only, phonetic splits with onset/coda)
 python -m build_tools.nltk_syllable_extractor --file input.txt
 
-# Normalize syllables (choose matching normaliser)
+# Normalize syllables (both use in-place processing)
 
 # For pyphen extractor output:
-python -m build_tools.syllable_normaliser --source data/raw/ --output _working/normalized/
+python -m build_tools.syllable_normaliser --run-dir _working/output/20260110_143022_pyphen/
 
 # For NLTK extractor output (in-place processing with fragment cleaning):
 python -m build_tools.nltk_syllable_normaliser --run-dir _working/output/20260110_095213_nltk/
 
 # Annotate with features (source-agnostic, works with both normalisers)
 python -m build_tools.syllable_feature_annotator \
-  --syllables _working/normalized/pyphen_syllables_unique.txt \
-  --frequencies _working/normalized/pyphen_syllables_frequencies.json
+  --syllables _working/output/20260110_143022_pyphen/pyphen_syllables_unique.txt \
+  --frequencies _working/output/20260110_143022_pyphen/pyphen_syllables_frequencies.json
 ```
 
 For detailed command options, see [Development Guide](claude/development.md).
@@ -101,12 +101,11 @@ python -m build_tools.syllable_extractor \
 
 # Creates: _working/output/YYYYMMDD_HHMMSS_pyphen/syllables/*.txt
 
-# 2. Normalize with pyphen normaliser
+# 2. Normalize with pyphen normaliser (in-place)
 python -m build_tools.syllable_normaliser \
-  --source _working/output/YYYYMMDD_HHMMSS_pyphen/syllables/ \
-  --output _working/normalized/
+  --run-dir _working/output/YYYYMMDD_HHMMSS_pyphen/
 
-# Creates: _working/normalized/pyphen_syllables_*.txt, pyphen_syllables_*.json
+# Creates (in-place): YYYYMMDD_HHMMSS_pyphen/pyphen_syllables_*.txt, pyphen_syllables_*.json
 ```
 
 #### **NLTK Pipeline (English-Only, Phonetic)**
@@ -138,7 +137,7 @@ All pipeline outputs use **prefixed naming** for clear provenance:
 
 #### **Normaliser Output Files**
 
-**Pyphen Normaliser** (written to user-specified output directory):
+**Pyphen Normaliser** (written in-place to run directory):
 
 ```text
 pyphen_syllables_raw.txt              # Aggregated raw syllables
@@ -166,7 +165,7 @@ nltk_normalization_meta.txt           # Statistics report
 | **Splitting Method** | Typographic hyphenation | Phonetic (onset/coda) |
 | **Syllable Quality** | Well-formed, formal | May have single-letter fragments |
 | **Normaliser Preprocessing** | None | Fragment cleaning (merges single letters) |
-| **Output Location** | User-specified directory | In-place (run directory) |
+| **Output Location** | In-place (run directory) | In-place (run directory) |
 | **Output Prefix** | `pyphen_*` | `nltk_*` |
 | **Typical Fragment Size** | 2-5+ characters | 1-5+ characters (before cleaning) |
 
@@ -215,12 +214,12 @@ Both pipelines can be run in parallel for comparison or hybrid corpus building:
 python -m build_tools.syllable_extractor --file input.txt --auto
 python -m build_tools.nltk_syllable_extractor --file input.txt
 
-# Normalize both
-python -m build_tools.syllable_normaliser --source _working/output/20260110_143022_pyphen/syllables/ --output _working/pyphen_normalized/
+# Normalize both (both use in-place processing now)
+python -m build_tools.syllable_normaliser --run-dir _working/output/20260110_143022_pyphen/
 python -m build_tools.nltk_syllable_normaliser --run-dir _working/output/20260110_095213_nltk/
 
 # Compare outputs (different prefixes make this clear)
-diff _working/pyphen_normalized/pyphen_syllables_unique.txt \
+diff _working/output/20260110_143022_pyphen/pyphen_syllables_unique.txt \
      _working/output/20260110_095213_nltk/nltk_syllables_unique.txt
 ```
 

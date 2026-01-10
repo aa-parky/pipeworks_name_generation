@@ -47,12 +47,12 @@ Quick Start
    # Option 2: NLTK extractor (English only, phonetic splits)
    python -m build_tools.nltk_syllable_extractor --file input.txt
 
-   # Normalize extracted syllables (choose matching normaliser)
+   # Normalize extracted syllables (both use in-place processing)
 
    # For pyphen extractor output:
-   python -m build_tools.syllable_normaliser --source data/corpus/ --output results/
+   python -m build_tools.syllable_normaliser --run-dir _working/output/20260110_143022_pyphen/
 
-   # For NLTK extractor output (in-place processing):
+   # For NLTK extractor output:
    python -m build_tools.nltk_syllable_normaliser --run-dir _working/output/20260110_095213_nltk/
 
    # Annotate syllables with phonetic features

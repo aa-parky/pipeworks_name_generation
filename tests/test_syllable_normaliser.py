@@ -506,23 +506,20 @@ class TestFullPipeline:
 
     def test_full_pipeline_end_to_end(self, tmp_path: Path):
         """Test complete pipeline from input files to all outputs."""
-        # Create input files
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-        file1 = input_dir / "corpus1.txt"
-        file2 = input_dir / "corpus2.txt"
+        # Create pyphen run directory structure
+        run_dir = tmp_path / "20260110_143022_pyphen"
+        syllables_dir = run_dir / "syllables"
+        syllables_dir.mkdir(parents=True)
+
+        file1 = syllables_dir / "corpus1.txt"
+        file2 = syllables_dir / "corpus2.txt"
 
         file1.write_text("Café\nHello\nWorld\nCafé\n", encoding="utf-8")
         file2.write_text("résumé\nHello\ntest\n", encoding="utf-8")
 
-        # Create output directory
-        output_dir = tmp_path / "output"
-
-        # Run pipeline
+        # Run pipeline (in-place processing)
         config = NormalizationConfig(min_length=2, max_length=20)
-        result = run_full_pipeline(
-            input_files=[file1, file2], output_dir=output_dir, config=config, verbose=False
-        )
+        result = run_full_pipeline(run_directory=run_dir, config=config, verbose=False, quiet=True)
 
         # Verify output files exist
         assert result.raw_file.exists()
@@ -559,10 +556,12 @@ class TestFullPipeline:
 
     def test_pipeline_with_rejections(self, tmp_path: Path):
         """Test pipeline handles rejected syllables correctly."""
-        # Create input file with various edge cases
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-        test_file = input_dir / "test.txt"
+        # Create pyphen run directory structure
+        run_dir = tmp_path / "20260110_150000_pyphen"
+        syllables_dir = run_dir / "syllables"
+        syllables_dir.mkdir(parents=True)
+
+        test_file = syllables_dir / "test.txt"
 
         test_file.write_text(
             "hello\n"  # Valid
@@ -573,12 +572,9 @@ class TestFullPipeline:
             encoding="utf-8",
         )
 
-        output_dir = tmp_path / "output"
         config = NormalizationConfig(min_length=2, max_length=8)
 
-        result = run_full_pipeline(
-            input_files=[test_file], output_dir=output_dir, config=config, verbose=False
-        )
+        result = run_full_pipeline(run_directory=run_dir, config=config, verbose=False, quiet=True)
 
         # Check statistics
         # Note: Empty lines are filtered during aggregation, not during canonicalization
@@ -590,24 +586,28 @@ class TestFullPipeline:
 
     def test_pipeline_determinism(self, tmp_path: Path):
         """Test that pipeline produces deterministic output."""
-        # Create input files
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-        test_file = input_dir / "test.txt"
-        test_file.write_text("ka\nra\nmi\nka\nta\n", encoding="utf-8")
+        # Create two pyphen run directories with identical input
+        run_dir1 = tmp_path / "20260110_160000_pyphen"
+        syllables_dir1 = run_dir1 / "syllables"
+        syllables_dir1.mkdir(parents=True)
+        test_file1 = syllables_dir1 / "test.txt"
+        test_file1.write_text("ka\nra\nmi\nka\nta\n", encoding="utf-8")
 
-        output_dir1 = tmp_path / "output1"
-        output_dir2 = tmp_path / "output2"
+        run_dir2 = tmp_path / "20260110_170000_pyphen"
+        syllables_dir2 = run_dir2 / "syllables"
+        syllables_dir2.mkdir(parents=True)
+        test_file2 = syllables_dir2 / "test.txt"
+        test_file2.write_text("ka\nra\nmi\nka\nta\n", encoding="utf-8")
 
         config = NormalizationConfig()
 
-        # Run pipeline twice
+        # Run pipeline twice on different run directories
         result1 = run_full_pipeline(
-            input_files=[test_file], output_dir=output_dir1, config=config, verbose=False
+            run_directory=run_dir1, config=config, verbose=False, quiet=True
         )
 
         result2 = run_full_pipeline(
-            input_files=[test_file], output_dir=output_dir2, config=config, verbose=False
+            run_directory=run_dir2, config=config, verbose=False, quiet=True
         )
 
         # Verify identical statistics
@@ -624,3 +624,61 @@ class TestFullPipeline:
         unique1 = result1.unique_file.read_text(encoding="utf-8")
         unique2 = result2.unique_file.read_text(encoding="utf-8")
         assert unique1 == unique2
+
+
+class TestRunDirectoryDetection:
+    """Tests for pyphen run directory detection."""
+
+    def test_detect_pyphen_run_directories(self, tmp_path: Path):
+        """Test auto-detection of pyphen run directories."""
+        from build_tools.syllable_normaliser.cli import detect_pyphen_run_directories
+
+        # Create multiple pyphen run directories
+        run1 = tmp_path / "20260110_100000_pyphen"
+        (run1 / "syllables").mkdir(parents=True)
+
+        run2 = tmp_path / "20260110_110000_pyphen"
+        (run2 / "syllables").mkdir(parents=True)
+
+        run3 = tmp_path / "20260110_120000_pyphen"
+        (run3 / "syllables").mkdir(parents=True)
+
+        # Create non-pyphen directory (should be ignored)
+        other = tmp_path / "20260110_130000_nltk"
+        (other / "syllables").mkdir(parents=True)
+
+        # Create pyphen directory without syllables/ subdirectory (should be ignored)
+        incomplete = tmp_path / "20260110_140000_pyphen"
+        incomplete.mkdir()
+
+        # Detect pyphen run directories
+        detected = detect_pyphen_run_directories(tmp_path)
+
+        # Should find 3 pyphen runs, sorted chronologically
+        assert len(detected) == 3
+        assert detected[0].name == "20260110_100000_pyphen"
+        assert detected[1].name == "20260110_110000_pyphen"
+        assert detected[2].name == "20260110_120000_pyphen"
+
+    def test_detect_no_pyphen_directories(self, tmp_path: Path):
+        """Test detection when no pyphen directories exist."""
+        from build_tools.syllable_normaliser.cli import detect_pyphen_run_directories
+
+        # Create only NLTK directories
+        nltk_run = tmp_path / "20260110_100000_nltk"
+        (nltk_run / "syllables").mkdir(parents=True)
+
+        # Detect pyphen run directories
+        detected = detect_pyphen_run_directories(tmp_path)
+
+        # Should find nothing
+        assert len(detected) == 0
+
+    def test_detect_nonexistent_directory(self, tmp_path: Path):
+        """Test detection with nonexistent source directory."""
+        from build_tools.syllable_normaliser.cli import detect_pyphen_run_directories
+
+        nonexistent = tmp_path / "does_not_exist"
+
+        with pytest.raises(FileNotFoundError):
+            detect_pyphen_run_directories(nonexistent)
