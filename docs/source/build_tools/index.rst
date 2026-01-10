@@ -20,7 +20,9 @@ Tool Overview
    * - :doc:`nltk_syllable_extractor`
      - Phonetically-guided syllable extraction using NLTK CMUDict with onset/coda principles
    * - :doc:`syllable_normaliser`
-     - 3-step normalization pipeline (aggregation, canonicalization, frequency analysis)
+     - 3-step normalization pipeline for pyphen extractor output
+   * - :doc:`nltk_syllable_normaliser`
+     - NLTK-specific normalization with fragment cleaning for phonetically coherent syllables
    * - :doc:`syllable_feature_annotator`
      - Phonetic feature detection (onset, nucleus, coda features)
    * - :doc:`syllable_walk`
@@ -45,8 +47,13 @@ Quick Start
    # Option 2: NLTK extractor (English only, phonetic splits)
    python -m build_tools.nltk_syllable_extractor --file input.txt
 
-   # Normalize extracted syllables (works with either extractor)
+   # Normalize extracted syllables (choose matching normaliser)
+
+   # For pyphen extractor output:
    python -m build_tools.syllable_normaliser --source data/corpus/ --output results/
+
+   # For NLTK extractor output (in-place processing):
+   python -m build_tools.nltk_syllable_normaliser --run-dir _working/output/20260110_095213_nltk/
 
    # Annotate syllables with phonetic features
    python -m build_tools.syllable_feature_annotator
@@ -66,6 +73,7 @@ Detailed Documentation
    syllable_extractor
    nltk_syllable_extractor
    syllable_normaliser
+   nltk_syllable_normaliser
    syllable_feature_annotator
    syllable_walk
    corpus_db

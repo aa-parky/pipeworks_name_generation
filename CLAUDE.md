@@ -40,11 +40,18 @@ python -m build_tools.syllable_extractor --file input.txt --auto
 # Option 2: NLTK (English only, phonetic splits with onset/coda)
 python -m build_tools.nltk_syllable_extractor --file input.txt
 
-# Normalize syllables (works with either extractor)
-python -m build_tools.syllable_normaliser --source data/corpus/ --output _working/normalized/
+# Normalize syllables (choose matching normaliser)
 
-# Annotate with features (source-agnostic)
-python -m build_tools.syllable_feature_annotator
+# For pyphen extractor output:
+python -m build_tools.syllable_normaliser --source data/raw/ --output _working/normalized/
+
+# For NLTK extractor output (in-place processing with fragment cleaning):
+python -m build_tools.nltk_syllable_normaliser --run-dir _working/output/20260110_095213_nltk/
+
+# Annotate with features (source-agnostic, works with both normalisers)
+python -m build_tools.syllable_feature_annotator \
+  --syllables _working/normalized/pyphen_syllables_unique.txt \
+  --frequencies _working/normalized/pyphen_syllables_frequencies.json
 ```
 
 For detailed command options, see [Development Guide](claude/development.md).
@@ -64,15 +71,158 @@ Detailed documentation is organized in the `claude/` directory:
 ### Build Tool Documentation
 
 - **[Syllable Extractor](claude/build_tools/syllable_extractor.md)** - Dictionary-based syllable
-  extraction (pyphen, 40+ languages)
-- **[NLTK Syllable Extractor]** - Phonetically-guided syllable extraction (CMUDict + onset/coda, English only)
+  extraction (pyphen, 40+ languages, typographic hyphenation)
+- **[NLTK Syllable Extractor]** - Phonetically-guided syllable extraction (CMUDict + onset/coda,
+  English only, phonetic splits)
 - **[Syllable Normaliser](claude/build_tools/syllable_normaliser.md)** - 3-step normalization
-  pipeline
+  pipeline for pyphen extractor output (outputs: pyphen_* files)
+- **[NLTK Syllable Normaliser]** - NLTK-specific normalization with fragment cleaning (in-place
+  processing, outputs: nltk_* files)
 - **[Feature Annotator](claude/build_tools/feature_annotator.md)** - Phonetic feature detection
 - **[Corpus Database](claude/build_tools/corpus_db.md)** - Build provenance ledger for tracking
   extraction runs
 - **[Analysis Tools](claude/build_tools/analysis_tools.md)** - Post-annotation analysis and
   visualization
+
+## Build Pipeline Patterns
+
+### Extraction + Normalization Workflows
+
+The project supports two parallel syllable extraction pipelines with matching normalisers:
+
+#### **Pyphen Pipeline (Multi-Language, Typographic)**
+
+```bash
+# 1. Extract with pyphen (typographic hyphenation)
+python -m build_tools.syllable_extractor \
+  --source data/corpus/ \
+  --lang en_US \
+  --output _working/output/
+
+# Creates: _working/output/YYYYMMDD_HHMMSS_pyphen/syllables/*.txt
+
+# 2. Normalize with pyphen normaliser
+python -m build_tools.syllable_normaliser \
+  --source _working/output/YYYYMMDD_HHMMSS_pyphen/syllables/ \
+  --output _working/normalized/
+
+# Creates: _working/normalized/pyphen_syllables_*.txt, pyphen_syllables_*.json
+```
+
+#### **NLTK Pipeline (English-Only, Phonetic)**
+
+```bash
+# 1. Extract with NLTK (phonetic splitting with onset/coda)
+python -m build_tools.nltk_syllable_extractor \
+  --source data/corpus/ \
+  --pattern "*.txt" \
+  --output _working/output/
+
+# Creates: _working/output/YYYYMMDD_HHMMSS_nltk/syllables/*.txt
+
+# 2. Normalize with NLTK normaliser (in-place with fragment cleaning)
+python -m build_tools.nltk_syllable_normaliser \
+  --run-dir _working/output/YYYYMMDD_HHMMSS_nltk/
+
+# Creates (in-place): YYYYMMDD_HHMMSS_nltk/nltk_syllables_*.txt, nltk_syllables_*.json
+```
+
+### File Naming Conventions
+
+All pipeline outputs use **prefixed naming** for clear provenance:
+
+#### **Extractor Output Directories**
+
+- Pyphen: `YYYYMMDD_HHMMSS_pyphen/` (typographic hyphenation)
+- NLTK: `YYYYMMDD_HHMMSS_nltk/` (phonetic splitting)
+
+#### **Normaliser Output Files**
+
+**Pyphen Normaliser** (written to user-specified output directory):
+
+```text
+pyphen_syllables_raw.txt              # Aggregated raw syllables
+pyphen_syllables_canonicalised.txt    # Normalized (Unicode, diacritics, etc.)
+pyphen_syllables_frequencies.json     # Frequency intelligence
+pyphen_syllables_unique.txt           # Deduplicated inventory
+pyphen_normalization_meta.txt         # Statistics report
+```
+
+**NLTK Normaliser** (written in-place to run directory):
+
+```text
+nltk_syllables_raw.txt                # Aggregated raw syllables
+nltk_syllables_canonicalised.txt      # After fragment cleaning + normalization
+nltk_syllables_frequencies.json       # Frequency intelligence
+nltk_syllables_unique.txt             # Deduplicated inventory
+nltk_normalization_meta.txt           # Statistics report
+```
+
+### Key Differences: Pyphen vs NLTK
+
+| Feature | Pyphen Pipeline | NLTK Pipeline |
+|---------|-----------------|---------------|
+| **Language Support** | 40+ languages | English only (CMUDict) |
+| **Splitting Method** | Typographic hyphenation | Phonetic (onset/coda) |
+| **Syllable Quality** | Well-formed, formal | May have single-letter fragments |
+| **Normaliser Preprocessing** | None | Fragment cleaning (merges single letters) |
+| **Output Location** | User-specified directory | In-place (run directory) |
+| **Output Prefix** | `pyphen_*` | `nltk_*` |
+| **Typical Fragment Size** | 2-5+ characters | 1-5+ characters (before cleaning) |
+
+### Fragment Cleaning (NLTK-Specific)
+
+The NLTK normaliser includes a **fragment cleaning** preprocessing step to reconstruct
+phonetically coherent syllables:
+
+**Rules:**
+
+1. Single vowels (a, e, i, o, u, y) merge with next fragment
+2. Single consonants merge with next fragment
+3. Multi-character fragments remain unchanged
+
+**Example:**
+
+```text
+Before cleaning: ["i", "down", "the", "r", "a", "bbit", "h", "o", "le"]
+After cleaning:  ["idown", "the", "ra", "bbit", "ho", "le"]
+```
+
+**Impact:** Typically reduces syllable count by ~9% by merging isolated single-letter fragments.
+
+### When to Use Which Pipeline
+
+**Use Pyphen Pipeline When:**
+
+- You need multi-language support (40+ languages)
+- You want formal, typographic syllable boundaries
+- You prefer well-formed syllables without fragment issues
+- You're working with non-English text
+
+**Use NLTK Pipeline When:**
+
+- You're working with English text only
+- You want phonetically-guided syllable boundaries
+- You prefer consonant cluster integrity (e.g., "An-drew" not "And-rew")
+- You want syllables that feel more like spoken language
+
+**Combining Both Pipelines:**
+
+Both pipelines can be run in parallel for comparison or hybrid corpus building:
+
+```bash
+# Extract with both
+python -m build_tools.syllable_extractor --file input.txt --auto
+python -m build_tools.nltk_syllable_extractor --file input.txt
+
+# Normalize both
+python -m build_tools.syllable_normaliser --source _working/output/20260110_143022_pyphen/syllables/ --output _working/pyphen_normalized/
+python -m build_tools.nltk_syllable_normaliser --run-dir _working/output/20260110_095213_nltk/
+
+# Compare outputs (different prefixes make this clear)
+diff _working/pyphen_normalized/pyphen_syllables_unique.txt \
+     _working/output/20260110_095213_nltk/nltk_syllables_unique.txt
+```
 
 ## Critical Implementation Rules
 
