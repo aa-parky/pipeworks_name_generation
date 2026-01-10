@@ -104,11 +104,10 @@ The syllable extractor is the first step in the build pipeline:
 
 .. code-block:: bash
 
-   # Step 1: Extract syllables from corpus
+   # Step 1: Extract syllables from corpus (language auto-detected or defaults to en_US)
    python -m build_tools.syllable_extractor \
      --source data/corpus/ \
      --pattern "*.txt" \
-     --lang en_US \
      --output data/raw/
 
    # Step 2: Normalize extracted syllables
@@ -133,7 +132,30 @@ The syllable extractor is the first step in the build pipeline:
 - **Multiple files**: ``--files file1.txt file2.txt`` - Process specific files
 - **Directory scan**: ``--source /data/ --pattern "*.txt"`` - Scan directory for files
 - **Recursive scan**: ``--source /data/ --pattern "*.txt" --recursive`` - Scan subdirectories
-- **Auto-detect language**: ``--auto`` - Use automatic language detection (requires ``langdetect``)
+
+**Language selection (optional):**
+
+- **Intelligent defaults**: If no language is specified, the tool automatically:
+
+  - Uses ``--auto`` (automatic detection) if ``langdetect`` is installed
+  - Falls back to ``en_US`` if ``langdetect`` is not available
+  - Displays which default was chosen at runtime
+
+- **Explicit language**: ``--lang en_US`` - Specify a specific language code
+- **Force auto-detect**: ``--auto`` - Explicitly request automatic language detection (requires ``langdetect``)
+
+**Examples:**
+
+.. code-block:: bash
+
+   # Simple usage (language auto-selected)
+   python -m build_tools.syllable_extractor --file input.txt
+
+   # Explicit language selection
+   python -m build_tools.syllable_extractor --file input.txt --lang de_DE
+
+   # Force automatic detection
+   python -m build_tools.syllable_extractor --file input.txt --auto
 
 Notes
 -----

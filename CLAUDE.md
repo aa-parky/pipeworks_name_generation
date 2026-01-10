@@ -35,7 +35,8 @@ pre-commit run --all-files
 # Extract syllables (choose one extractor)
 
 # Option 1: pyphen (40+ languages, typographic hyphenation)
-python -m build_tools.syllable_extractor --file input.txt --auto
+# Language auto-detected if langdetect installed, otherwise defaults to en_US
+python -m build_tools.syllable_extractor --file input.txt
 
 # Option 2: NLTK (English only, phonetic splits with onset/coda)
 python -m build_tools.nltk_syllable_extractor --file input.txt
@@ -94,9 +95,9 @@ The project supports two parallel syllable extraction pipelines with matching no
 
 ```bash
 # 1. Extract with pyphen (typographic hyphenation)
+# Language auto-detected if langdetect installed, otherwise defaults to en_US
 python -m build_tools.syllable_extractor \
   --source data/corpus/ \
-  --lang en_US \
   --output _working/output/
 
 # Creates: _working/output/YYYYMMDD_HHMMSS_pyphen/syllables/*.txt
@@ -210,8 +211,8 @@ After cleaning:  ["idown", "the", "ra", "bbit", "ho", "le"]
 Both pipelines can be run in parallel for comparison or hybrid corpus building:
 
 ```bash
-# Extract with both
-python -m build_tools.syllable_extractor --file input.txt --auto
+# Extract with both (pyphen will auto-detect language by default)
+python -m build_tools.syllable_extractor --file input.txt
 python -m build_tools.nltk_syllable_extractor --file input.txt
 
 # Normalize both (both use in-place processing now)

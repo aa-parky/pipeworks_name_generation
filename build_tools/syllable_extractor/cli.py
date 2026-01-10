@@ -554,13 +554,16 @@ Examples
    # Interactive mode (no arguments)
    python -m build_tools.syllable_extractor
 
-   # Single file
+   # Single file (language auto-detected or defaults to en_US)
+   python -m build_tools.syllable_extractor --file input.txt
+
+   # Single file with explicit language
    python -m build_tools.syllable_extractor --file input.txt --lang en_US
 
-   # Multiple files
+   # Multiple files with automatic language detection
    python -m build_tools.syllable_extractor --files file1.txt file2.txt file3.txt --auto
 
-   # Directory scan (non-recursive)
+   # Directory scan (language auto-detected or defaults to en_US)
    python -m build_tools.syllable_extractor --source /data/texts/ --pattern "*.txt"
 
    # Directory scan (recursive)
@@ -579,13 +582,19 @@ Examples
     )
     input_group.add_argument("--source", type=Path, help="Directory to scan for files")
 
-    # Language specification (mutually exclusive)
+    # Language specification (mutually exclusive, optional with intelligent defaults)
     lang_group = parser.add_mutually_exclusive_group()
-    lang_group.add_argument("--lang", type=str, help="Language code (e.g., en_US, de_DE, fr)")
+    lang_group.add_argument(
+        "--lang",
+        type=str,
+        help="Language code (e.g., en_US, de_DE, fr). "
+        "If omitted, uses --auto if langdetect is installed, otherwise en_US.",
+    )
     lang_group.add_argument(
         "--auto",
         action="store_true",
-        help="Automatically detect language (requires langdetect)",
+        help="Automatically detect language (requires langdetect). "
+        "This is the default if langdetect is installed and --lang is not specified.",
     )
 
     # Directory scanning options
@@ -921,14 +930,21 @@ def main_batch(args: argparse.Namespace):
         print(f"Error: Maximum syllable length ({args.max}) must be >= minimum ({args.min})")
         sys.exit(1)
 
-    # Determine language code
+    # Determine language code with intelligent defaults
     if args.auto:
         language_code = "auto"
     elif args.lang:
         language_code = args.lang
     else:
-        print("Error: Either --lang or --auto must be specified")
-        sys.exit(1)
+        # Default behavior: auto-detect if available, otherwise en_US
+        if is_detection_available():
+            language_code = "auto"
+            if not args.quiet:
+                print("ℹ️  No language specified - using automatic detection (--auto)")
+        else:
+            language_code = "en_US"
+            if not args.quiet:
+                print("ℹ️  No language specified - defaulting to English US (en_US)")
 
     # Initialize corpus_db ledger for provenance tracking
     run_id = None
