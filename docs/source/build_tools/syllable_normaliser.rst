@@ -21,17 +21,17 @@ Command-Line Interface
 Output Format
 -------------
 
-The pipeline generates 5 output files in the specified output directory:
+The pipeline generates 5 output files in the specified output directory (with ``pyphen_`` prefix for provenance):
 
-1. **syllables_raw.txt** - Aggregated raw syllables (all occurrences preserved)
-2. **syllables_canonicalised.txt** - Normalized canonical syllables
-3. **syllables_frequencies.json** - Frequency intelligence (syllable → count mapping)
-4. **syllables_unique.txt** - Deduplicated canonical syllable inventory
-5. **normalization_meta.txt** - Detailed statistics and metadata report
+1. **pyphen_syllables_raw.txt** - Aggregated raw syllables (all occurrences preserved)
+2. **pyphen_syllables_canonicalised.txt** - Normalized canonical syllables
+3. **pyphen_syllables_frequencies.json** - Frequency intelligence (syllable → count mapping)
+4. **pyphen_syllables_unique.txt** - Deduplicated canonical syllable inventory
+5. **pyphen_normalization_meta.txt** - Detailed statistics and metadata report
 
 **File structure examples:**
 
-``syllables_raw.txt`` (preserves all occurrences):
+``pyphen_syllables_raw.txt`` (preserves all occurrences):
 
 ::
 
@@ -41,7 +41,7 @@ The pipeline generates 5 output files in the specified output directory:
     hello
     world
 
-``syllables_canonicalised.txt`` (normalized, duplicates preserved):
+``pyphen_syllables_canonicalised.txt`` (normalized, duplicates preserved):
 
 ::
 
@@ -51,7 +51,7 @@ The pipeline generates 5 output files in the specified output directory:
     hello
     world
 
-``syllables_frequencies.json`` (counts before deduplication):
+``pyphen_syllables_frequencies.json`` (counts before deduplication):
 
 .. code-block:: json
 
@@ -61,7 +61,7 @@ The pipeline generates 5 output files in the specified output directory:
      "world": 1
    }
 
-``syllables_unique.txt`` (deduplicated, sorted):
+``pyphen_syllables_unique.txt`` (deduplicated, sorted):
 
 ::
 
@@ -88,8 +88,8 @@ The syllable normaliser sits between extraction and annotation in the pipeline:
 
    # Step 3: Annotate with phonetic features
    python -m build_tools.syllable_feature_annotator \
-     --syllables data/normalized/syllables_unique.txt \
-     --frequencies data/normalized/syllables_frequencies.json
+     --syllables data/normalized/pyphen_syllables_unique.txt \
+     --frequencies data/normalized/pyphen_syllables_frequencies.json
 
 **When to use this tool:**
 

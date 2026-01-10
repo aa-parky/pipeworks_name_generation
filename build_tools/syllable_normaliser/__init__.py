@@ -21,13 +21,13 @@ Features:
 - Comprehensive metadata reporting
 - 5 output files for complete analysis
 
-The pipeline produces 5 output files:
+The pipeline produces 5 output files (with pyphen_ prefix for provenance):
 
-- syllables_raw.txt: Aggregated raw syllables (all occurrences preserved)
-- syllables_canonicalised.txt: Normalized canonical syllables
-- syllables_frequencies.json: Frequency intelligence (syllable → count)
-- syllables_unique.txt: Deduplicated canonical syllable inventory
-- normalization_meta.txt: Detailed statistics and metadata report
+- pyphen_syllables_raw.txt: Aggregated raw syllables (all occurrences preserved)
+- pyphen_syllables_canonicalised.txt: Normalized canonical syllables
+- pyphen_syllables_frequencies.json: Frequency intelligence (syllable → count)
+- pyphen_syllables_unique.txt: Deduplicated canonical syllable inventory
+- pyphen_normalization_meta.txt: Detailed statistics and metadata report
 
 Usage:
     >>> from pathlib import Path

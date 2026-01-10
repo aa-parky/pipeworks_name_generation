@@ -357,7 +357,7 @@ class TestFileAggregator:
 
     def test_save_raw_syllables(self, tmp_path: Path):
         """Test saving raw syllables to file."""
-        output_file = tmp_path / "syllables_raw.txt"
+        output_file = tmp_path / "pyphen_syllables_raw.txt"
         syllables = ["ka", "ra", "mi"]
 
         aggregator = FileAggregator()

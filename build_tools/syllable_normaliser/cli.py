@@ -61,12 +61,12 @@ def run_full_pipeline(
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Define output file paths
-    raw_file = output_dir / "syllables_raw.txt"
-    canonical_file = output_dir / "syllables_canonicalised.txt"
-    frequency_file = output_dir / "syllables_frequencies.json"
-    unique_file = output_dir / "syllables_unique.txt"
-    meta_file = output_dir / "normalization_meta.txt"
+    # Define output file paths (with pyphen_ prefix for provenance)
+    raw_file = output_dir / "pyphen_syllables_raw.txt"
+    canonical_file = output_dir / "pyphen_syllables_canonicalised.txt"
+    frequency_file = output_dir / "pyphen_syllables_frequencies.json"
+    unique_file = output_dir / "pyphen_syllables_unique.txt"
+    meta_file = output_dir / "pyphen_normalization_meta.txt"
 
     print("\n" + "=" * 70)
     print("SYLLABLE NORMALIZATION PIPELINE")
