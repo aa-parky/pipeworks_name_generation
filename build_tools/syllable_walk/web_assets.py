@@ -177,7 +177,7 @@ HTML_TEMPLATE = """
                             <input type="number" id="seed-a" placeholder="Optional">
                         </div>
 
-                        <button class="btn btn-panel" onclick="generateWalkA()">
+                        <button id="generate-btn-a" class="btn btn-panel" onclick="generateWalkA()">
                             Generate Walk A
                         </button>
                     </div>
@@ -234,7 +234,7 @@ HTML_TEMPLATE = """
                             <input type="number" id="seed-b" placeholder="Optional">
                         </div>
 
-                        <button class="btn btn-panel" onclick="generateWalkB()">
+                        <button id="generate-btn-b" class="btn btn-panel" onclick="generateWalkB()">
                             Generate Walk B
                         </button>
                     </div>
@@ -263,6 +263,7 @@ HTML_TEMPLATE = """
         let datasetPathB = null;
         let walkCountA = 0;
         let walkCountB = 0;
+        let serverLoadedDataset = null;  // Track which dataset is currently loaded on server
 
         const profileDescriptions = {
             clerical: "Conservative, favors common syllables, minimal phonetic change",
@@ -287,6 +288,9 @@ HTML_TEMPLATE = """
 
                 availableDatasets = data.datasets;
                 currentDatasetPath = data.current;
+
+                // Initialize server-loaded dataset tracker
+                serverLoadedDataset = data.current;
 
                 const select = document.getElementById('dataset-select');
                 select.innerHTML = '';
@@ -322,6 +326,8 @@ HTML_TEMPLATE = """
                 const data = await response.json();
                 document.getElementById('total-syllables').textContent =
                     data.total_syllables.toLocaleString();
+                // Track what's loaded on server
+                serverLoadedDataset = data.current_dataset;
             } catch (error) {
                 console.error('Error loading stats:', error);
             }
@@ -359,6 +365,7 @@ HTML_TEMPLATE = """
                 } else {
                     // Update current path
                     currentDatasetPath = newPath;
+                    serverLoadedDataset = newPath;  // Track server state
 
                     // Update stats
                     document.getElementById('total-syllables').textContent =
@@ -529,60 +536,50 @@ HTML_TEMPLATE = """
             if (availableDatasets.length > 0) {
                 datasetPathA = availableDatasets[0].path;
                 selectA.value = datasetPathA;
-                loadDatasetStatsA();
+                // Update stats from cached data (no API call needed!)
+                document.getElementById('syllables-a').textContent =
+                    availableDatasets[0].syllable_count.toLocaleString();
             }
 
             // Select second dataset if available, otherwise same as first
             if (availableDatasets.length > 1) {
                 datasetPathB = availableDatasets[1].path;
                 selectB.value = datasetPathB;
-                loadDatasetStatsB();
+                // Update stats from cached data
+                document.getElementById('syllables-b').textContent =
+                    availableDatasets[1].syllable_count.toLocaleString();
             } else if (availableDatasets.length > 0) {
                 datasetPathB = availableDatasets[0].path;
                 selectB.value = datasetPathB;
-                loadDatasetStatsB();
+                // Update stats from cached data
+                document.getElementById('syllables-b').textContent =
+                    availableDatasets[0].syllable_count.toLocaleString();
             }
         }
 
-        // Load dataset stats for panel A
-        async function loadDatasetStatsA() {
-            try {
-                const response = await fetch('/api/load-dataset', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: datasetPathA })
-                });
-                const data = await response.json();
-                if (!data.error) {
-                    document.getElementById('syllables-a').textContent = data.total_syllables.toLocaleString();
-                }
-            } catch (error) {
-                console.error('Error loading dataset A stats:', error);
+        // Update stats for panel A from cached dataset info
+        function updateDatasetStatsA() {
+            const dataset = availableDatasets.find(ds => ds.path === datasetPathA);
+            if (dataset) {
+                document.getElementById('syllables-a').textContent =
+                    dataset.syllable_count.toLocaleString();
             }
         }
 
-        // Load dataset stats for panel B
-        async function loadDatasetStatsB() {
-            try {
-                const response = await fetch('/api/load-dataset', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: datasetPathB })
-                });
-                const data = await response.json();
-                if (!data.error) {
-                    document.getElementById('syllables-b').textContent = data.total_syllables.toLocaleString();
-                }
-            } catch (error) {
-                console.error('Error loading dataset B stats:', error);
+        // Update stats for panel B from cached dataset info
+        function updateDatasetStatsB() {
+            const dataset = availableDatasets.find(ds => ds.path === datasetPathB);
+            if (dataset) {
+                document.getElementById('syllables-b').textContent =
+                    dataset.syllable_count.toLocaleString();
             }
         }
 
-        // Load dataset A
-        async function loadDatasetA() {
+        // Load dataset A (when user changes selection)
+        function loadDatasetA() {
             const select = document.getElementById('dataset-select-a');
             datasetPathA = select.value;
-            await loadDatasetStatsA();
+            updateDatasetStatsA();
 
             // Reset walk count and output
             walkCountA = 0;
@@ -591,11 +588,11 @@ HTML_TEMPLATE = """
                 '<div class="loading"><p>Generate walk to begin exploring</p></div>';
         }
 
-        // Load dataset B
-        async function loadDatasetB() {
+        // Load dataset B (when user changes selection)
+        function loadDatasetB() {
             const select = document.getElementById('dataset-select-b');
             datasetPathB = select.value;
-            await loadDatasetStatsB();
+            updateDatasetStatsB();
 
             // Reset walk count and output
             walkCountB = 0;
@@ -618,29 +615,46 @@ HTML_TEMPLATE = """
 
         // Generate walk for panel A
         async function generateWalkA() {
-            const btn = event.target;
+            const btn = document.getElementById('generate-btn-a');
             const output = document.getElementById('walk-output-a');
 
             btn.disabled = true;
-            output.innerHTML = '<div class="loading"><div class="spinner"></div><p>Generating walk...</p></div>';
-
-            // Load dataset A first
-            await fetch('/api/load-dataset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: datasetPathA })
-            });
-
-            const profile = document.getElementById('profile-a').value;
-            const params = {
-                start: document.getElementById('start-syllable-a').value || null,
-                profile: profile,
-                ...profileParams[profile],
-                seed: document.getElementById('seed-a').value ?
-                    parseInt(document.getElementById('seed-a').value) : null
-            };
 
             try {
+                // Only load dataset if it's different from what's currently loaded
+                if (serverLoadedDataset !== datasetPathA) {
+                    output.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading dataset...</p></div>';
+
+                    const loadResponse = await fetch('/api/load-dataset', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path: datasetPathA })
+                    });
+
+                    const loadData = await loadResponse.json();
+
+                    if (loadData.error) {
+                        output.innerHTML = `<div class="error">Error loading dataset: ${loadData.error}</div>`;
+                        btn.disabled = false;
+                        return;
+                    }
+
+                    // Update server-loaded dataset tracker to exact path we sent
+                    serverLoadedDataset = datasetPathA;
+                }
+
+                // Dataset is loaded, now generate walk
+                output.innerHTML = '<div class="loading"><div class="spinner"></div><p>Generating walk...</p></div>';
+
+                const profile = document.getElementById('profile-a').value;
+                const params = {
+                    start: document.getElementById('start-syllable-a').value || null,
+                    profile: profile,
+                    ...profileParams[profile],
+                    seed: document.getElementById('seed-a').value ?
+                        parseInt(document.getElementById('seed-a').value) : null
+                };
+
                 const response = await fetch('/api/walk', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -665,29 +679,46 @@ HTML_TEMPLATE = """
 
         // Generate walk for panel B
         async function generateWalkB() {
-            const btn = event.target;
+            const btn = document.getElementById('generate-btn-b');
             const output = document.getElementById('walk-output-b');
 
             btn.disabled = true;
-            output.innerHTML = '<div class="loading"><div class="spinner"></div><p>Generating walk...</p></div>';
-
-            // Load dataset B first
-            await fetch('/api/load-dataset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: datasetPathB })
-            });
-
-            const profile = document.getElementById('profile-b').value;
-            const params = {
-                start: document.getElementById('start-syllable-b').value || null,
-                profile: profile,
-                ...profileParams[profile],
-                seed: document.getElementById('seed-b').value ?
-                    parseInt(document.getElementById('seed-b').value) : null
-            };
 
             try {
+                // Only load dataset if it's different from what's currently loaded
+                if (serverLoadedDataset !== datasetPathB) {
+                    output.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading dataset...</p></div>';
+
+                    const loadResponse = await fetch('/api/load-dataset', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path: datasetPathB })
+                    });
+
+                    const loadData = await loadResponse.json();
+
+                    if (loadData.error) {
+                        output.innerHTML = `<div class="error">Error loading dataset: ${loadData.error}</div>`;
+                        btn.disabled = false;
+                        return;
+                    }
+
+                    // Update server-loaded dataset tracker to exact path we sent
+                    serverLoadedDataset = datasetPathB;
+                }
+
+                // Dataset is loaded, now generate walk
+                output.innerHTML = '<div class="loading"><div class="spinner"></div><p>Generating walk...</p></div>';
+
+                const profile = document.getElementById('profile-b').value;
+                const params = {
+                    start: document.getElementById('start-syllable-b').value || null,
+                    profile: profile,
+                    ...profileParams[profile],
+                    seed: document.getElementById('seed-b').value ?
+                        parseInt(document.getElementById('seed-b').value) : null
+                };
+
                 const response = await fetch('/api/walk', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

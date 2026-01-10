@@ -28,18 +28,18 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the syllable walker web interface.
 
     This handler processes HTTP requests and serves the web interface. It maintains
-    a reference to the SyllableWalker instance and handles routing for HTML, CSS,
-    and API endpoints.
+    a cache of SyllableWalker instances (one per dataset) for fast switching between
+    datasets without reloading.
 
     Class Attributes:
-        walker: Shared SyllableWalker instance used for all requests
+        walker_cache: Dictionary mapping dataset paths to SyllableWalker instances
         max_neighbor_distance: Configuration for walker initialization
-        current_dataset_path: Path to currently loaded dataset
+        current_dataset_path: Path to currently active dataset
         verbose: Whether to print progress messages
     """
 
     # Class attributes (shared across all request handlers)
-    walker: Optional[SyllableWalker] = None
+    walker_cache: dict[str, SyllableWalker] = {}
     max_neighbor_distance: int = 3
     current_dataset_path: Optional[Path] = None
     verbose: bool = True
@@ -63,12 +63,21 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
             content: Response body content
             content_type: MIME type for Content-Type header. Default: text/html
             status: HTTP status code. Default: 200
+
+        Note:
+            Gracefully handles connection errors (BrokenPipeError, ConnectionResetError)
+            when the client closes the connection before receiving the response.
         """
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(content.encode("utf-8"))))
-        self.end_headers()
-        self.wfile.write(content.encode("utf-8"))
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(content.encode("utf-8"))))
+            self.end_headers()
+            self.wfile.write(content.encode("utf-8"))
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # Client closed connection before receiving response - this is normal
+            # for cancelled requests or timeouts. Nothing we can do, so silently ignore.
+            pass
 
     def _send_json_response(self, data: dict[str, Any], status: int = 200) -> None:
         """Send JSON response with appropriate headers.
@@ -89,6 +98,17 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
         """
         self._send_json_response({"error": message}, status=status)
 
+    def _get_current_walker(self) -> Optional[SyllableWalker]:
+        """Get the walker for the currently active dataset.
+
+        Returns:
+            SyllableWalker instance for current dataset, or None if no dataset active
+        """
+        if self.current_dataset_path is None:
+            return None
+        path_key = str(self.current_dataset_path)
+        return self.walker_cache.get(path_key)
+
     def do_GET(self) -> None:  # noqa: N802
         """Handle GET requests for HTML, CSS, and stats API endpoint.
 
@@ -108,13 +128,14 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/api/stats":
             # Return walker statistics
-            if self.walker is None:
-                self._send_error_response("Walker not initialized", status=500)
+            walker = self._get_current_walker()
+            if walker is None:
+                self._send_error_response("No dataset loaded", status=500)
                 return
 
             stats = {
-                "total_syllables": len(self.walker.syllables),
-                "max_neighbor_distance": self.walker.max_neighbor_distance,
+                "total_syllables": len(walker.syllables),
+                "max_neighbor_distance": walker.max_neighbor_distance,
                 "current_dataset": (
                     str(self.current_dataset_path) if self.current_dataset_path else None
                 ),
@@ -137,7 +158,11 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
 
         else:
             # 404 for unknown paths
-            self.send_error(404, "Not Found")
+            try:
+                self.send_error(404, "Not Found")
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                # Client closed connection - ignore
+                pass
 
     def do_POST(self) -> None:  # noqa: N802
         """Handle POST requests for walk generation API endpoint.
@@ -164,8 +189,9 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
             }
         """
         if self.path == "/api/walk":
-            if self.walker is None:
-                self._send_error_response("Walker not initialized", status=500)
+            walker = self._get_current_walker()
+            if walker is None:
+                self._send_error_response("No dataset loaded", status=500)
                 return
 
             try:
@@ -179,7 +205,7 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
                 params = json.loads(body.decode("utf-8"))
 
                 # Extract parameters with defaults
-                start = params.get("start") or self.walker.get_random_syllable()
+                start = params.get("start") or walker.get_random_syllable()
                 profile = params.get("profile", "dialect")
                 steps = params.get("steps", 5)
                 seed = params.get("seed")
@@ -187,7 +213,7 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
                 # Generate walk based on profile
                 if profile == "custom":
                     # Use custom parameters
-                    walk = self.walker.walk(
+                    walk = walker.walk(
                         start=start,
                         steps=steps,
                         max_flips=params.get("max_flips", 2),
@@ -197,7 +223,7 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
                     )
                 else:
                     # Use named profile
-                    walk = self.walker.walk_from_profile(
+                    walk = walker.walk_from_profile(
                         start=start, profile=profile, steps=steps, seed=seed
                     )
 
@@ -213,7 +239,7 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
                 self._send_error_response(f"Server error: {e}", status=500)
 
         elif self.path == "/api/load-dataset":
-            # Load a different dataset dynamically
+            # Load a different dataset dynamically (with caching)
             try:
                 # Parse JSON request body
                 content_length = int(self.headers.get("Content-Length", 0))
@@ -234,32 +260,42 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
                     self._send_error_response(f"Dataset file not found: {dataset_path}")
                     return
 
-                # Print progress if verbose
-                if self.verbose:
-                    print(f"\nLoading new dataset: {dataset_path}")
-                    print("This may take a minute for large datasets...")
+                path_key = str(dataset_path)
 
-                # Load new walker
-                new_walker = SyllableWalker(
-                    dataset_path,
-                    max_neighbor_distance=self.max_neighbor_distance,
-                    verbose=self.verbose,
-                )
+                # Check if walker is already cached
+                if path_key in WalkerHTTPHandler.walker_cache:
+                    # Walker already loaded - instant switch!
+                    if self.verbose:
+                        walker = WalkerHTTPHandler.walker_cache[path_key]
+                        print(
+                            f"✓ Dataset already cached, instant switch! ({len(walker.syllables):,} syllables)"
+                        )
+                    WalkerHTTPHandler.current_dataset_path = dataset_path
+                    walker = WalkerHTTPHandler.walker_cache[path_key]
+                else:
+                    # Walker not cached - load it
+                    if self.verbose:
+                        print(f"\nLoading new dataset: {dataset_path}")
+                        print("This may take a minute for large datasets...")
 
-                # Update class attributes
-                WalkerHTTPHandler.walker = new_walker
-                WalkerHTTPHandler.current_dataset_path = dataset_path
-
-                if self.verbose:
-                    print(
-                        f"✓ Dataset loaded successfully! ({len(new_walker.syllables):,} syllables)"
+                    walker = SyllableWalker(
+                        dataset_path,
+                        max_neighbor_distance=self.max_neighbor_distance,
+                        verbose=self.verbose,
                     )
+
+                    # Cache the walker
+                    WalkerHTTPHandler.walker_cache[path_key] = walker
+                    WalkerHTTPHandler.current_dataset_path = dataset_path
+
+                    if self.verbose:
+                        print(f"✓ Dataset loaded and cached! ({len(walker.syllables):,} syllables)")
 
                 # Return success response with stats
                 response = {
                     "success": True,
                     "dataset": str(dataset_path),
-                    "total_syllables": len(new_walker.syllables),
+                    "total_syllables": len(walker.syllables),
                 }
                 self._send_json_response(response)
 
@@ -274,7 +310,11 @@ class WalkerHTTPHandler(BaseHTTPRequestHandler):
 
         else:
             # 404 for unknown POST paths
-            self.send_error(404, "Not Found")
+            try:
+                self.send_error(404, "Not Found")
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                # Client closed connection - ignore
+                pass
 
 
 def run_server(
@@ -358,7 +398,8 @@ def run_server(
     walker = SyllableWalker(data_path, max_neighbor_distance=max_neighbor_distance, verbose=verbose)
 
     # Store configuration in class attributes (shared across all request handlers)
-    WalkerHTTPHandler.walker = walker
+    path_key = str(data_path)
+    WalkerHTTPHandler.walker_cache = {path_key: walker}  # Initialize cache with first walker
     WalkerHTTPHandler.max_neighbor_distance = max_neighbor_distance
     WalkerHTTPHandler.current_dataset_path = data_path
     WalkerHTTPHandler.verbose = verbose
