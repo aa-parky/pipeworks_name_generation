@@ -21,17 +21,56 @@ Command-Line Interface
 Output Format
 -------------
 
-Output files are saved to ``_working/output/`` with timestamped names including language codes:
+Output files are organized in a run-based subdirectory structure under ``_working/output/``. Each extraction run creates a timestamped directory containing ``syllables/`` and ``meta/`` subdirectories:
 
-- ``YYYYMMDD_HHMMSS.syllables.en_US.txt`` - All syllables (one per line, preserves duplicates)
-- ``YYYYMMDD_HHMMSS.meta.en_US.txt`` - Extraction metadata and statistics
-
-**Examples:**
+**Directory structure:**
 
 ::
 
-    20260109_143022.syllables.en_US.txt
-    20260109_143022.meta.en_US.txt
+    _working/output/
+      └── YYYYMMDD_HHMMSS/          # Run directory (one per batch)
+          ├── syllables/
+          │   ├── file1.txt          # Input filename preserved
+          │   ├── file2.txt
+          │   └── ...
+          └── meta/
+              ├── file1.txt          # Matching metadata
+              ├── file2.txt
+              └── ...
+
+**Interactive mode (single file):**
+
+::
+
+    _working/output/
+      └── 20260110_143022/
+          ├── syllables/
+          │   └── en_US.txt
+          └── meta/
+              └── en_US.txt
+
+**Batch mode (multiple files):**
+
+::
+
+    _working/output/
+      └── 20260110_143022/          # All files share one run directory
+          ├── syllables/
+          │   ├── alice.txt
+          │   ├── middlemarch.txt
+          │   └── don_quijote.txt
+          └── meta/
+              ├── alice.txt
+              ├── middlemarch.txt
+              └── don_quijote.txt
+
+**Benefits of run-based organization:**
+
+- Each extraction run is self-contained in a timestamped directory
+- Easy to archive, move, or delete entire runs as atomic units
+- Input filenames are preserved for easy identification
+- Clean separation between syllables and metadata
+- All outputs from a batch operation are grouped together
 
 **Syllables file format:**
 
@@ -246,8 +285,11 @@ This design allows downstream tools to:
 
 **Output Organization:**
 
-- Files are timestamped to preserve extraction history
-- Language code always ``en_US`` in filenames
+- Each extraction run creates a timestamped directory (``YYYYMMDD_HHMMSS/``)
+- Run directory contains ``syllables/`` and ``meta/`` subdirectories
+- Batch processing groups all files into a single run directory
+- Input filenames are preserved in output (e.g., ``alice.txt``)
+- Interactive mode uses ``en_US.txt`` as the filename
 - Metadata clearly labels extractor source for provenance
 - All extractions logged to corpus database (if available)
 
