@@ -130,9 +130,12 @@ class TestTUIConfig:
         config = TUIConfig(config_path=temp_config_file)
         directory = config.get_last_corpus_directory()
 
-        assert "_working/output" in directory
+        # Normalize path for cross-platform comparison
+        directory_path = Path(directory)
+        assert directory_path.name == "output"
+        assert directory_path.parent.name == "_working"
         # Should be an absolute path
-        assert Path(directory).is_absolute()
+        assert directory_path.is_absolute()
 
     def test_set_last_corpus_updates_directory(self, temp_config_file):
         """Setting last corpus should update the directory."""
@@ -141,7 +144,10 @@ class TestTUIConfig:
         config.set_last_corpus(corpus_path, "pyphen")
 
         # Directory should be updated to parent of corpus file
-        assert config.get_last_corpus_directory() == "/some/dir/data"
+        # Use Path for cross-platform comparison
+        expected_dir = str(Path("/some/dir/data"))
+        actual_dir = config.get_last_corpus_directory()
+        assert Path(actual_dir) == Path(expected_dir)
 
     def test_get_last_corpus_returns_none_initially(self, temp_config_file):
         """get_last_corpus should return None when no corpus has been loaded."""
