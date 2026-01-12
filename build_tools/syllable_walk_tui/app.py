@@ -377,6 +377,6 @@ class SyllableWalkerApp(App):
         )
         self.notify(help_text, timeout=5)
 
-    def action_quit(self) -> None:
+    def action_quit(self) -> None:  # type: ignore[override]
         """Quit the application."""
         self.exit()

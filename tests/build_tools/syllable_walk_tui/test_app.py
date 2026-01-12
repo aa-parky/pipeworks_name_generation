@@ -33,7 +33,7 @@ class TestSyllableWalkerApp:
         """Test that app creates correct layout structure."""
         app = SyllableWalkerApp()
 
-        async with app.run_test() as _pilot:
+        async with app.run_test():
             # Check header and footer exist
             assert app.query_one(Header)
             assert app.query_one(Footer)
@@ -60,7 +60,7 @@ class TestSyllableWalkerApp:
         """Test that app starts on Patch Config tab."""
         app = SyllableWalkerApp()
 
-        async with app.run_test() as _pilot:
+        async with app.run_test():
             tabs = app.query_one(TabbedContent)
             assert tabs.active == "patch-config"
 
@@ -69,7 +69,7 @@ class TestSyllableWalkerApp:
         """Test that action_switch_tab changes active tab."""
         app = SyllableWalkerApp()
 
-        async with app.run_test() as _pilot:
+        async with app.run_test() as pilot:
             tabs = app.query_one(TabbedContent)
 
             # Start on patch-config
@@ -95,7 +95,7 @@ class TestSyllableWalkerApp:
         """Test that tab switching works via configured keybindings."""
         app = SyllableWalkerApp()
 
-        async with app.run_test() as _pilot:
+        async with app.run_test() as pilot:
             tabs = app.query_one(TabbedContent)
 
             # Press 'b' to switch to Blended Walk
@@ -118,7 +118,7 @@ class TestSyllableWalkerApp:
         """Test that 'q' key quits the application."""
         app = SyllableWalkerApp()
 
-        async with app.run_test() as _pilot:
+        async with app.run_test() as pilot:
             # Press 'q' to quit
             await pilot.press("q")
             await pilot.pause()
@@ -131,7 +131,7 @@ class TestSyllableWalkerApp:
         """Test that help action shows notification."""
         app = SyllableWalkerApp()
 
-        async with app.run_test() as _pilot:
+        async with app.run_test() as pilot:
             # Trigger help action
             app.action_help()
             await pilot.pause()
@@ -143,7 +143,7 @@ class TestSyllableWalkerApp:
         """Test that corpus selection keybindings are registered."""
         app = SyllableWalkerApp()
 
-        async with app.run_test() as _pilot:
+        async with app.run_test():
             # Check that corpus selection actions exist
             assert hasattr(app, "action_select_corpus_a")
             assert hasattr(app, "action_select_corpus_b")
@@ -239,7 +239,7 @@ class TestPatchPanel:
             def compose(self):
                 yield PatchPanel("A")
 
-        async with TestApp().run_test() as _pilot:
+        async with TestApp().run_test() as pilot:
             # Check for corpus selection button
             assert pilot.app.query_one("#select-corpus-A")
 
@@ -259,15 +259,13 @@ class TestStatsPanel:
             def compose(self):
                 yield StatsPanel()
 
-        async with TestApp().run_test() as _pilot:
+        async with TestApp().run_test() as pilot:
             # Should have stats header
             stats_labels = pilot.app.query(Label)
             assert len(stats_labels) > 0
 
             # Check for "COMPARISON STATS" header
-            header_found = any(
-                "COMPARISON STATS" in str(label.renderable) for label in stats_labels
-            )
+            header_found = any("COMPARISON STATS" in str(label.render()) for label in stats_labels)
             assert header_found
 
 
@@ -285,7 +283,7 @@ class TestCorpusSelectionFlow:
         (corpus_dir / "nltk_syllables_unique.txt").write_text("test\n")
         (corpus_dir / "nltk_syllables_frequencies.json").write_text(json.dumps({"test": 1}))
 
-        async with app.run_test() as _pilot:
+        async with app.run_test() as pilot:
             # Mock the push_screen_wait to return our corpus directory
             async def mock_push_screen_wait(screen):
                 return corpus_dir
@@ -314,7 +312,7 @@ class TestCorpusSelectionFlow:
         (corpus_dir / "nltk_syllables_unique.txt").write_text("test\n")
         (corpus_dir / "nltk_syllables_frequencies.json").write_text(json.dumps({"test": 1}))
 
-        async with app.run_test() as _pilot:
+        async with app.run_test() as pilot:
             # Mock the push_screen_wait
             async def mock_push_screen_wait(screen):
                 return corpus_dir
@@ -327,7 +325,7 @@ class TestCorpusSelectionFlow:
 
                 # Check UI was updated
                 status_label = app.query_one("#corpus-status-A", Label)
-                status_text = str(status_label.renderable)
+                status_text = str(status_label.render())
 
                 assert "NLTK" in status_text
 
@@ -336,7 +334,7 @@ class TestCorpusSelectionFlow:
         """Test that cancelling corpus selection doesn't update state."""
         app = SyllableWalkerApp()
 
-        async with app.run_test() as _pilot:
+        async with app.run_test() as pilot:
             # Mock push_screen_wait to return None (cancelled)
             async def mock_push_screen_wait(screen):
                 return None
@@ -360,7 +358,7 @@ class TestCorpusSelectionFlow:
         invalid_corpus = tmp_path / "invalid"
         invalid_corpus.mkdir()
 
-        async with app.run_test() as _pilot:
+        async with app.run_test() as pilot:
 
             async def mock_push_screen_wait(screen):
                 return invalid_corpus
@@ -388,7 +386,7 @@ class TestFocusManagement:
         (corpus_dir / "nltk_syllables_unique.txt").write_text("test\n")
         (corpus_dir / "nltk_syllables_frequencies.json").write_text(json.dumps({"test": 1}))
 
-        async with app.run_test() as _pilot:
+        async with app.run_test() as pilot:
 
             async def mock_push_screen_wait(screen):
                 return corpus_dir

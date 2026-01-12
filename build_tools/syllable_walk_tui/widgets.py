@@ -216,10 +216,10 @@ class CorpusBrowserScreen(ModalScreen[Path | None]):
         """Collapse directory in tree (h key)."""
         tree = self.query_one("#directory-tree", DirectoryTree)
         # For DirectoryTree, left collapses the current node
-        tree.action_cursor_left()
+        tree.action_cursor_left()  # type: ignore[attr-defined]
 
     def action_cursor_right(self) -> None:
         """Expand directory in tree (l key)."""
         tree = self.query_one("#directory-tree", DirectoryTree)
         # For DirectoryTree, right expands the current node
-        tree.action_cursor_right()
+        tree.action_cursor_right()  # type: ignore[attr-defined]
