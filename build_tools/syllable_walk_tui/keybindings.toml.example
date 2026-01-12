@@ -1,0 +1,72 @@
+# Example keybindings configuration for Syllable Walker TUI
+#
+# Copy this file to ~/.config/pipeworks_tui/keybindings.toml to customize
+# your keybindings.
+#
+# Note: After modifying this file, restart the TUI for changes to take effect.
+
+[keybindings]
+version = 1
+
+# Global actions
+[keybindings.global]
+quit = ["q", "ctrl+q"]
+help = ["question_mark", "f1"]
+
+# Tab/screen switching
+[keybindings.tabs]
+patch_config = ["p"]
+blended_walk = ["b"]
+analysis = ["a"]
+
+# Navigation (for Phase 2+)
+[keybindings.navigation]
+up = ["k", "up"]
+down = ["j", "down"]
+left = ["h", "left"]
+right = ["l", "right"]
+next_panel = ["tab", "ctrl+n"]
+prev_panel = ["shift+tab", "ctrl+p"]
+
+# Control manipulation (for Phase 2+)
+[keybindings.controls]
+activate = ["enter", "space"]
+increment = ["plus", "equal", "right_square_bracket"]
+decrement = ["minus", "left_square_bracket"]
+
+# Patch operations (for Phase 3+)
+[keybindings.patch]
+generate = ["g", "f5"]
+copy = ["y", "ctrl+c"]
+paste = ["p", "ctrl+v"]
+reset = ["r"]
+swap = ["x"]
+
+# ============================================================================
+# Key Name Reference
+# ============================================================================
+#
+# Common key names for use in bindings:
+#
+# Letters: a-z (lowercase)
+# Numbers: 0-9
+# Function keys: f1-f12
+# Special keys:
+#   - enter, space, tab, escape
+#   - up, down, left, right
+#   - backspace, delete
+#   - home, end, pageup, pagedown
+#
+# Modifiers (combine with +):
+#   - ctrl+key (e.g., ctrl+c)
+#   - shift+key (e.g., shift+tab)
+#   - alt+key (e.g., alt+f)
+#
+# Punctuation:
+#   - comma, period, slash, backslash
+#   - semicolon, apostrophe, grave_accent
+#   - minus, equal, plus
+#   - left_square_bracket, right_square_bracket
+#   - question_mark, exclamation_mark
+#
+# Full list: https://textual.textualize.io/guide/input/#key

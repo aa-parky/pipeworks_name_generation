@@ -87,6 +87,8 @@ Issues = "https://github.com/aa-parky/pipeworks_name_generation/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 python_files = "test_*.py"
 python_functions = "test_*"
 addopts = "--cov=pipeworks_name_generation --cov=build_tools --cov-report=html --cov-report=term"
