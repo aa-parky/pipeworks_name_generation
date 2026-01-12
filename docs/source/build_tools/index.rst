@@ -27,6 +27,8 @@ Tool Overview
      - Phonetic feature detection (onset, nucleus, coda features)
    * - :doc:`syllable_walk`
      - Explore phonetic feature space via cost-based random walks
+   * - :doc:`syllable_walk_tui`
+     - Interactive TUI for exploring phonetic space with side-by-side patch configuration
    * - :doc:`corpus_db`
      - Build provenance ledger for tracking extraction runs (inputs, outputs, settings)
    * - :doc:`corpus_db_viewer`
@@ -58,8 +60,11 @@ Quick Start
    # Annotate syllables with phonetic features
    python -m build_tools.syllable_feature_annotator
 
-   # Explore syllable walks (interactive)
+   # Explore syllable walks (interactive web UI)
    python -m build_tools.syllable_walk data/annotated/syllables_annotated.json --web
+
+   # Or use interactive TUI for side-by-side comparison
+   python -m build_tools.syllable_walk_tui
 
    # Analyze and visualize
    python -m build_tools.syllable_analysis.tsne_visualizer --interactive
@@ -76,6 +81,7 @@ Detailed Documentation
    nltk_syllable_normaliser
    syllable_feature_annotator
    syllable_walk
+   syllable_walk_tui
    corpus_db
    corpus_db_viewer
    analysis_tools
