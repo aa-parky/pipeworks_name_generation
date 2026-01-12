@@ -28,6 +28,7 @@ dependencies = []
 # Development dependencies
 dev = [
     "pytest>=7.4",
+    "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1",
     "ruff>=0.1",
     "mypy>=1.7",
@@ -37,6 +38,7 @@ dev = [
     "bandit[toml]>=1.7",
     "build>=1.0",
     "textual>=0.50.0",  # For syllable_walk_tui testing
+    "tomli>=2.0.0;python_version<'3.11'",  # TOML parser for config files
     "pyphen>=0.14.0",
     "langdetect>=1.0.9",
     "cmudict>=1.0.0",
