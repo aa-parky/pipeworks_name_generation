@@ -22,10 +22,14 @@ class TestPatchState:
         assert 0 <= patch.seed < 2**32
         assert patch.corpus_dir is None
         assert patch.corpus_type is None
+
+        # Walk profile parameters (defaults match "Dialect" profile)
         assert patch.min_length == 2
         assert patch.max_length == 5
         assert patch.walk_length == 5
-        assert patch.freq_bias == 0.5
+        assert patch.max_flips == 2
+        assert patch.temperature == 0.7
+        assert patch.frequency_weight == 0.0
         assert patch.neighbor_limit == 10
         assert patch.outputs == []
 
