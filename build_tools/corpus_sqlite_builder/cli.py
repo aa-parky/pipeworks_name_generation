@@ -30,25 +30,32 @@ def create_argument_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Convert single corpus (auto-discovers JSON in data/ subdirectory)
-  python -m build_tools.corpus_sqlite_builder \\
-    _working/output/20260110_115453_pyphen/
+Examples
+========
 
-  # Force overwrite existing database
-  python -m build_tools.corpus_sqlite_builder \\
-    _working/output/20260110_115453_pyphen/ --force
+.. code-block:: bash
 
-  # Dry run to check what would be converted
-  python -m build_tools.corpus_sqlite_builder \\
-    _working/output/20260110_115453_pyphen/ --dry-run
+   # Convert single corpus (auto-discovers JSON in data/ subdirectory)
+   python -m build_tools.corpus_sqlite_builder \\
+     _working/output/20260110_115453_pyphen/
 
-  # Batch convert all corpora in output directory
-  python -m build_tools.corpus_sqlite_builder --batch _working/output/
+   # Force overwrite existing database
+   python -m build_tools.corpus_sqlite_builder \\
+     _working/output/20260110_115453_pyphen/ --force
 
-Output:
-  Creates corpus.db in the data/ subdirectory of the corpus:
-    _working/output/20260110_115453_pyphen/data/corpus.db
+   # Dry run to check what would be converted
+   python -m build_tools.corpus_sqlite_builder \\
+     _working/output/20260110_115453_pyphen/ --dry-run
+
+   # Batch convert all corpora in output directory
+   python -m build_tools.corpus_sqlite_builder --batch _working/output/
+
+Output
+======
+
+Creates corpus.db in the data/ subdirectory of the corpus::
+
+   _working/output/20260110_115453_pyphen/data/corpus.db
         """,
     )
 
