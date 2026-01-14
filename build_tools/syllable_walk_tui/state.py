@@ -33,11 +33,14 @@ class PatchState:
         is_loading_annotated: Flag indicating background loading in progress
         loading_error: Error message if annotated data failed to load (None if no error)
 
-        min_length: Minimum syllable length
-        max_length: Maximum syllable length
-        walk_length: Number of steps in random walk
-        freq_bias: Frequency bias (0.0-1.0)
-        neighbor_limit: Maximum neighbors to consider
+        # Walk profile parameters (defaults to "Dialect" profile)
+        min_length: Minimum syllable character count (1-10)
+        max_length: Maximum syllable character count (1-10)
+        walk_length: Number of syllables to chain (2-20)
+        max_flips: Maximum feature changes per step (1-3)
+        temperature: Exploration randomness, higher = more chaos (0.1-5.0)
+        frequency_weight: Bias toward common (+) or rare (-) syllables (-2.0 to 2.0)
+        neighbor_limit: Candidate pool size per step (5-50)
         outputs: Generated names from last generation
     """
 
@@ -55,11 +58,14 @@ class PatchState:
     is_loading_annotated: bool = False
     loading_error: str | None = None
 
-    min_length: int = 2
-    max_length: int = 5
-    walk_length: int = 5
-    freq_bias: float = 0.5
-    neighbor_limit: int = 10
+    # Walk profile parameters (defaults match "Dialect" profile from profiles.py)
+    min_length: int = 2  # Syllable character count min
+    max_length: int = 5  # Syllable character count max
+    walk_length: int = 5  # Number of syllables to chain
+    max_flips: int = 2  # Feature changes per step (1-3)
+    temperature: float = 0.7  # Exploration randomness (0.1-5.0)
+    frequency_weight: float = 0.0  # Bias toward common (+) or rare (-) (-2.0 to 2.0)
+    neighbor_limit: int = 10  # Candidate pool size per step
     outputs: list[str] = field(default_factory=list)
 
     def __post_init__(self):

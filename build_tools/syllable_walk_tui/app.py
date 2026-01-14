@@ -3,12 +3,31 @@ Main Textual application for Syllable Walker TUI.
 
 This module contains the primary App class and layout widgets for the
 interactive terminal interface.
+
+FOCUS MANAGEMENT PATTERN
+========================
+
+This app uses a centralized focus management pattern to prevent parameter
+widgets from blocking app-level keybindings (b/a/p for tab switching).
+
+Key Components:
+1. App-level BINDINGS use Binding(..., priority=True) for global navigation
+2. After modals close, explicitly blur focused widgets (line ~408)
+3. Parameter widgets (IntSpinner, FloatSlider, SeedInput) auto-blur after
+   value changes (see widgets.py for implementation)
+
+This pattern ensures app-level bindings always fire correctly, even when
+parameter widgets have focus. Without this pattern, Textual's focus system
+would prevent tab switching after modal closure or parameter adjustment.
+
+See widgets.py module docstring for detailed implementation requirements.
 """
 
 from pathlib import Path
 
 from textual import on, work
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Button, Footer, Header, Label, Static, TabbedContent, TabPane
 
@@ -19,8 +38,14 @@ from build_tools.syllable_walk_tui.corpus import (
     load_corpus_data,
     validate_corpus_directory,
 )
+from build_tools.syllable_walk_tui.focus_manager import FocusManager
 from build_tools.syllable_walk_tui.state import AppState
-from build_tools.syllable_walk_tui.widgets import CorpusBrowserScreen
+from build_tools.syllable_walk_tui.widgets import (
+    CorpusBrowserScreen,
+    FloatSlider,
+    IntSpinner,
+    SeedInput,
+)
 
 
 class PatchPanel(Static):
@@ -51,13 +76,78 @@ class PatchPanel(Static):
         )
 
         yield Label("", classes="spacer")
-        yield Label("Min Len:    [2     ±]")
-        yield Label("Max Len:    [5     ±]")
-        yield Label("Walk Len:   [5     ±]")
-        yield Label("Freq Bias:  [0.5   ─]")
-        yield Label("Neighbors:  [10    ±]")
+
+        # Parameter controls - matching Dialect profile defaults
+        # Filter Module - Syllable Length
+        yield IntSpinner(
+            "Min Length",
+            value=2,
+            min_val=1,
+            max_val=10,
+            id=f"min-length-{self.patch_name}",
+        )
+        yield IntSpinner(
+            "Max Length",
+            value=5,
+            min_val=1,
+            max_val=10,
+            id=f"max-length-{self.patch_name}",
+        )
+
+        # Envelope Module - Walk Length
+        yield IntSpinner(
+            "Walk Length",
+            value=5,
+            min_val=2,
+            max_val=20,
+            id=f"walk-length-{self.patch_name}",
+        )
+
+        # Oscillator Module - Max Feature Flips
+        yield IntSpinner(
+            "Max Flips",
+            value=2,
+            min_val=1,
+            max_val=3,
+            id=f"max-flips-{self.patch_name}",
+        )
+
+        # LFO Module - Temperature
+        yield FloatSlider(
+            "Temperature",
+            value=0.7,
+            min_val=0.1,
+            max_val=5.0,
+            step=0.1,
+            precision=1,
+            id=f"temperature-{self.patch_name}",
+        )
+
+        # LFO Module - Frequency Weight
+        yield FloatSlider(
+            "Freq Weight",
+            value=0.0,
+            min_val=-2.0,
+            max_val=2.0,
+            step=0.1,
+            precision=1,
+            id=f"freq-weight-{self.patch_name}",
+        )
+
+        # Attenuator Module - Neighbor Limit
+        yield IntSpinner(
+            "Neighbors",
+            value=10,
+            min_val=5,
+            max_val=50,
+            id=f"neighbors-{self.patch_name}",
+        )
+
         yield Label("", classes="spacer")
-        yield Label("Seed: [42      ] [🎲]")
+
+        # Global - Seed Input with Random Button
+        yield SeedInput(value=None, id=f"seed-{self.patch_name}")
+
         yield Label("", classes="spacer")
         yield Label("     [Generate]", classes="button-label")
         yield Label("", classes="spacer")
@@ -106,6 +196,21 @@ class SyllableWalkerApp(App):
         All keybindings are user-configurable via
         ~/.config/pipeworks_tui/keybindings.toml
     """
+
+    # Class-level bindings with priority=True to work even with focused widgets
+    # Using Binding class explicitly to enable priority (allows bindings to fire
+    # even when child widgets like IntSpinner/FloatSlider/SeedInput have focus)
+    BINDINGS = [
+        Binding("q", "quit", "Quit", priority=True),
+        Binding("ctrl+q", "quit", "Quit", priority=True),
+        Binding("question_mark", "help", "Help", priority=True),
+        Binding("f1", "help", "Help", priority=True),
+        Binding("p", "switch_tab('patch-config')", "Patch", priority=True),
+        Binding("b", "switch_tab('blended-walk')", "Blended", priority=True),
+        Binding("a", "switch_tab('analysis')", "Analysis", priority=True),
+        Binding("1", "select_corpus_a", "Corpus A", priority=True),
+        Binding("2", "select_corpus_b", "Corpus B", priority=True),
+    ]
 
     CSS = """
     Screen {
@@ -179,56 +284,20 @@ class SyllableWalkerApp(App):
     """
 
     def __init__(self):
-        """Initialize application with default state and keybindings."""
+        """Initialize application with default state."""
         super().__init__()
         self.state = AppState()
         self.keybindings = load_keybindings()
-
-        # Build dynamic bindings from config
-        self._setup_bindings()
-
-    def _setup_bindings(self) -> None:
-        """Set up keybindings from configuration."""
-        # Global bindings
-        for key in self.keybindings.global_bindings["quit"]:
-            self.bind(key, "quit", description="Quit", show=True)
-        for key in self.keybindings.global_bindings["help"]:
-            self.bind(key, "help", description="Help", show=True)
-
-        # Tab switching bindings (show in footer for discoverability)
-        patch_key = self.keybindings.get_primary_key("tabs", "patch_config")
-        blended_key = self.keybindings.get_primary_key("tabs", "blended_walk")
-        analysis_key = self.keybindings.get_primary_key("tabs", "analysis")
-
-        for key in self.keybindings.tab_bindings["patch_config"]:
-            self.bind(
-                key, "switch_tab('patch-config')", description=f"{patch_key}:Patch", show=True
-            )
-        for key in self.keybindings.tab_bindings["blended_walk"]:
-            self.bind(
-                key, "switch_tab('blended-walk')", description=f"{blended_key}:Blended", show=True
-            )
-        for key in self.keybindings.tab_bindings["analysis"]:
-            self.bind(
-                key, "switch_tab('analysis')", description=f"{analysis_key}:Analysis", show=True
-            )
-
-        # Corpus selection bindings
-        self.bind("1", "select_corpus_a", description="1:Corpus A", show=True)
-        self.bind("2", "select_corpus_b", description="2:Corpus B", show=True)
+        # Note: Keybindings are now defined in BINDINGS class attribute
+        # Config-based overrides can be added in future if needed
 
     def compose(self) -> ComposeResult:
         """Create application layout."""
         yield Header(show_clock=False)
 
-        # Get display keys for tab labels
-        patch_key = self.keybindings.get_display_key("tabs", "patch_config")
-        blended_key = self.keybindings.get_display_key("tabs", "blended_walk")
-        analysis_key = self.keybindings.get_display_key("tabs", "analysis")
-
         # Tab bar for multi-screen navigation
         with TabbedContent(initial="patch-config"):
-            with TabPane(f"[{patch_key}] Patch Config", id="patch-config"):
+            with TabPane("[p] Patch Config", id="patch-config"):
                 # Three-column layout
                 with Horizontal(id="main-container"):
                     with VerticalScroll(classes="column patch-panel"):
@@ -239,10 +308,10 @@ class SyllableWalkerApp(App):
                         yield PatchPanel("B", id="patch-b")
 
             # Placeholder tabs for future screens
-            with TabPane(f"[{blended_key}] Blended Walk", id="blended-walk"):
+            with TabPane("[b] Blended Walk", id="blended-walk"):
                 yield Label("Blended Walk screen (Phase 3+)", classes="placeholder")
 
-            with TabPane(f"[{analysis_key}] Analysis", id="analysis"):
+            with TabPane("[a] Analysis", id="analysis"):
                 yield Label("Analysis screen (Phase 4+)", classes="placeholder")
 
         yield Footer()
@@ -263,8 +332,19 @@ class SyllableWalkerApp(App):
         Solution: Disable focus on all VerticalScroll containers. They
         still scroll correctly, but they can't capture keyboard focus.
         """
+        # Initialize centralized focus manager
+        # Set debug=True and use `textual console` for focus debugging
+        self.focus_manager = FocusManager(self, debug=False)
+
         for scroll_container in self.query(VerticalScroll):
             scroll_container.can_focus = False
+
+        # Also disable focus on PatchPanel and StatsPanel containers
+        # to prevent them from capturing focus during TAB navigation
+        for patch_panel in self.query(PatchPanel):
+            patch_panel.can_focus = False
+        for stats_panel in self.query(StatsPanel):
+            stats_panel.can_focus = False
 
     def action_switch_tab(self, tab_id: str) -> None:
         """
@@ -343,6 +423,11 @@ class SyllableWalkerApp(App):
 
             # Open browser modal
             result = await self.push_screen_wait(CorpusBrowserScreen(initial_dir))
+
+            # CRITICAL FIX: Clear focus after modal closes using FocusManager
+            # This prevents Textual from auto-focusing a parameter widget,
+            # which would block app-level tab switching bindings (b/a/p)
+            self.focus_manager.clear_focus_after_modal()
 
             if result:
                 # Validate and store selection
@@ -626,18 +711,114 @@ class SyllableWalkerApp(App):
 
     def action_help(self) -> None:
         """Show help information."""
-        # Placeholder for Phase 2+
         help_text = (
             "Syllable Walker TUI - Keybindings\n\n"
-            f"[{self.keybindings.get_display_key('global', 'quit')}] Quit\n"
-            f"[{self.keybindings.get_display_key('global', 'help')}] Help\n\n"
-            f"Tabs:\n"
-            f"[{self.keybindings.get_display_key('tabs', 'patch_config')}] Patch Config\n"
-            f"[{self.keybindings.get_display_key('tabs', 'blended_walk')}] Blended Walk\n"
-            f"[{self.keybindings.get_display_key('tabs', 'analysis')}] Analysis\n"
+            "[q] Quit\n"
+            "[?] Help\n\n"
+            "Tabs:\n"
+            "[p] Patch Config\n"
+            "[b] Blended Walk\n"
+            "[a] Analysis\n\n"
+            "Corpus:\n"
+            "[1] Select Corpus A\n"
+            "[2] Select Corpus B\n\n"
+            "Parameters:\n"
+            "[TAB] Navigate controls\n"
+            "[j/k or +/-] Adjust values\n"
         )
-        self.notify(help_text, timeout=5)
+        self.notify(help_text, timeout=10)
 
     def action_quit(self) -> None:  # type: ignore[override]
         """Quit the application."""
         self.exit()
+
+    # =========================================================================
+    # Parameter Change Handlers - Wire widgets to PatchState
+    # =========================================================================
+
+    @on(IntSpinner.Changed)
+    def on_int_spinner_changed(self, event: IntSpinner.Changed) -> None:
+        """Handle integer spinner value changes and update patch state."""
+        # Use widget_id from the message
+        widget_id = event.widget_id
+        if not widget_id:
+            return
+
+        # Parse widget ID to determine patch and parameter
+        # Format: "<param>-<patch>" e.g., "min-length-A"
+        parts = widget_id.rsplit("-", 1)
+        if len(parts) != 2:
+            return
+
+        param_name, patch_name = parts
+        patch = self.state.patch_a if patch_name == "A" else self.state.patch_b
+
+        # Update the appropriate parameter in patch state
+        if param_name == "min-length":
+            patch.min_length = event.value
+        elif param_name == "max-length":
+            patch.max_length = event.value
+        elif param_name == "walk-length":
+            patch.walk_length = event.value
+        elif param_name == "max-flips":
+            patch.max_flips = event.value
+        elif param_name == "neighbors":
+            patch.neighbor_limit = event.value
+
+        # CRITICAL: Prevent auto-focus after parameter change
+        # The widget already called blur(), but ensure nothing else gets focused
+        self.focus_manager.prevent_auto_focus()
+
+    @on(FloatSlider.Changed)
+    def on_float_slider_changed(self, event: FloatSlider.Changed) -> None:
+        """Handle float slider value changes and update patch state."""
+        # Use widget_id from the message
+        widget_id = event.widget_id
+        if not widget_id:
+            return
+
+        # Parse widget ID to determine patch and parameter
+        parts = widget_id.rsplit("-", 1)
+        if len(parts) != 2:
+            return
+
+        param_name, patch_name = parts
+        patch = self.state.patch_a if patch_name == "A" else self.state.patch_b
+
+        # Update the appropriate parameter in patch state
+        if param_name == "temperature":
+            patch.temperature = event.value
+        elif param_name == "freq-weight":
+            patch.frequency_weight = event.value
+
+        # CRITICAL: Prevent auto-focus after parameter change
+        self.focus_manager.prevent_auto_focus()
+
+    @on(SeedInput.Changed)
+    def on_seed_changed(self, event: SeedInput.Changed) -> None:
+        """Handle seed input changes and update patch state."""
+        # Use widget_id from the message
+        widget_id = event.widget_id
+        if not widget_id:
+            return
+
+        # Parse widget ID to determine patch
+        # Format: "seed-<patch>" e.g., "seed-A"
+        parts = widget_id.rsplit("-", 1)
+        if len(parts) != 2 or parts[0] != "seed":
+            return
+
+        patch_name = parts[1]
+        patch = self.state.patch_a if patch_name == "A" else self.state.patch_b
+
+        # Update seed in patch state
+        if event.value is None:
+            # Blank seed = generate new random seed
+            patch.generate_seed()
+        else:
+            # Explicit seed value
+            patch.seed = event.value
+            patch.rng = __import__("random").Random(event.value)
+
+        # CRITICAL: Prevent auto-focus after seed change
+        self.focus_manager.prevent_auto_focus()
