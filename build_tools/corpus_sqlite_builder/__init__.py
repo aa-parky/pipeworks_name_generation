@@ -21,6 +21,9 @@ Usage:
     >>> print(f"Created: {db_path}")
 
 Command-line usage:
+
+.. code-block:: bash
+
     # Convert single corpus
     python -m build_tools.corpus_sqlite_builder _working/output/20260110_115453_pyphen/
 
