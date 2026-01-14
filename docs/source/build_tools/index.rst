@@ -25,6 +25,8 @@ Tool Overview
      - NLTK-specific normalization with fragment cleaning for phonetically coherent syllables
    * - :doc:`syllable_feature_annotator`
      - Phonetic feature detection (onset, nucleus, coda features)
+   * - :doc:`corpus_sqlite_builder`
+     - Convert annotated JSON to SQLite databases for fast TUI loading (optional performance optimization)
    * - :doc:`syllable_walk`
      - Explore phonetic feature space via cost-based random walks
    * - :doc:`syllable_walk_tui`
@@ -60,6 +62,9 @@ Quick Start
    # Annotate syllables with phonetic features
    python -m build_tools.syllable_feature_annotator
 
+   # (Optional) Convert to SQLite for faster TUI loading
+   python -m build_tools.corpus_sqlite_builder _working/output/20260110_143022_pyphen/
+
    # Explore syllable walks (interactive web UI)
    python -m build_tools.syllable_walk data/annotated/syllables_annotated.json --web
 
@@ -80,6 +85,7 @@ Detailed Documentation
    pyphen_syllable_normaliser
    nltk_syllable_normaliser
    syllable_feature_annotator
+   corpus_sqlite_builder
    syllable_walk
    syllable_walk_tui
    corpus_db

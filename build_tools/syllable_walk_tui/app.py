@@ -10,7 +10,6 @@ from pathlib import Path
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
-from textual.events import ScreenResume
 from textual.widgets import Button, Footer, Header, Label, Static, TabbedContent, TabPane
 
 from build_tools.syllable_walk_tui.config import load_keybindings
@@ -248,21 +247,24 @@ class SyllableWalkerApp(App):
 
         yield Footer()
 
-    def on_screen_resume(self, event: ScreenResume) -> None:
+    def on_mount(self) -> None:
         """
-        Handle screen resume event (after modal closes or app regains focus).
+        Handle app mount event.
 
-        This ensures keybindings work properly after:
-        1. Corpus selection modal closes
-        2. Switching back to terminal from another app
+        Disables focus on VerticalScroll containers to prevent them from
+        stealing focus when clicked. This ensures tab switching keybindings
+        always work, even after mouse clicks.
 
-        Args:
-            event: The ScreenResume event
+        The issue: VerticalScroll.can_focus = True by default. When users
+        click anywhere in the scroll area, it captures focus and doesn't
+        release it. This breaks tab switching because the App's bindings
+        only work when a focusable ancestor has focus.
+
+        Solution: Disable focus on all VerticalScroll containers. They
+        still scroll correctly, but they can't capture keyboard focus.
         """
-        # Set focus to self to ensure app-level keybindings work
-        # This prevents the issue where tab switching doesn't work after
-        # corpus selection or when returning to the terminal
-        self.screen.focus()
+        for scroll_container in self.query(VerticalScroll):
+            scroll_container.can_focus = False
 
     def action_switch_tab(self, tab_id: str) -> None:
         """
@@ -417,8 +419,6 @@ class SyllableWalkerApp(App):
                 else:
                     self.notify(f"Invalid corpus: {error}", severity="error", timeout=5)
 
-            # Note: Focus is automatically restored via on_screen_resume() when modal closes
-
         except Exception as e:
             # Catch any errors to prevent silent failures
             self.notify(f"Error selecting corpus: {e}", severity="error", timeout=5)
@@ -500,7 +500,7 @@ class SyllableWalkerApp(App):
             # === STEP 3: Load annotated data (SLOW - 1-2 seconds) ===
             # This is the expensive operation that happens in the background
             # The @work decorator ensures this doesn't block the UI
-            annotated_data = load_annotated_data(patch.corpus_dir)
+            annotated_data, load_metadata = load_annotated_data(patch.corpus_dir)
 
             # === STEP 4: Update patch state with loaded data ===
             patch.annotated_data = annotated_data
@@ -512,17 +512,36 @@ class SyllableWalkerApp(App):
                 corpus_info = get_corpus_info(patch.corpus_dir)
                 syllable_count = len(annotated_data)
 
-                # Show all files successfully loaded
+                # Build source indicator based on what was loaded
+                source = load_metadata.get("source", "unknown")
+                load_time = load_metadata.get("load_time_ms", "?")
+
+                # Show only files that were actually loaded
                 corpus_prefix = patch.corpus_type.lower() if patch.corpus_type else "nltk"
-                files_ready = (
-                    f"{corpus_info}\n"
-                    f"─────────────────\n"
-                    f"✓ {corpus_prefix}_syllables_unique.txt\n"
-                    f"✓ {corpus_prefix}_syllables_frequencies.json\n"
-                    f"✓ {corpus_prefix}_syllables_annotated.json\n"
-                    f"─────────────────\n"
-                    f"Ready: {syllable_count:,} syllables"
-                )
+
+                if source == "sqlite":
+                    # SQLite path: show corpus.db, JSON not loaded
+                    files_ready = (
+                        f"{corpus_info}\n"
+                        f"─────────────────\n"
+                        f"✓ {corpus_prefix}_syllables_unique.txt\n"
+                        f"✓ {corpus_prefix}_syllables_frequencies.json\n"
+                        f"✓ corpus.db ({load_time}ms, SQLite)\n"
+                        f"─────────────────\n"
+                        f"Ready: {syllable_count:,} syllables"
+                    )
+                else:
+                    # JSON fallback path: show annotated.json, SQLite not present
+                    file_name = load_metadata.get("file_name", "annotated.json")
+                    files_ready = (
+                        f"{corpus_info}\n"
+                        f"─────────────────\n"
+                        f"✓ {corpus_prefix}_syllables_unique.txt\n"
+                        f"✓ {corpus_prefix}_syllables_frequencies.json\n"
+                        f"✓ {file_name} ({load_time}ms, JSON)\n"
+                        f"─────────────────\n"
+                        f"Ready: {syllable_count:,} syllables"
+                    )
                 status_label.update(files_ready)
                 status_label.remove_class("corpus-status")
                 status_label.add_class("corpus-status-valid")
@@ -531,20 +550,18 @@ class SyllableWalkerApp(App):
                 print(f"Warning: Could not update status label (complete): {e}")
 
             # Notify user that loading completed successfully
-            self.notify(
-                f"Patch {patch_name}: Ready ({len(annotated_data):,} syllables with features)",
-                timeout=3,
-                severity="information",
-            )
-
-            # === STEP 6: Restore focus after background loading completes ===
-            # This is critical to ensure keybindings work after loading
-            # Without this, tab switching (P/B/A keys) may not work
-            try:
-                self.screen.focus()
-            except Exception as e:
-                # Log but don't fail if focus restoration has issues
-                print(f"Warning: Could not restore focus after loading: {e}")
+            if source == "sqlite":
+                self.notify(
+                    f"Patch {patch_name}: Loaded from SQLite ({len(annotated_data):,} syllables, {load_time}ms)",
+                    timeout=3,
+                    severity="information",
+                )
+            else:
+                self.notify(
+                    f"Patch {patch_name}: Loaded from JSON ({len(annotated_data):,} syllables, {load_time}ms)",
+                    timeout=3,
+                    severity="information",
+                )
 
         except FileNotFoundError as e:
             # === ERROR HANDLING: Annotated file doesn't exist ===
@@ -573,12 +590,6 @@ class SyllableWalkerApp(App):
                 pass  # Ignore UI update errors
 
             self.notify(f"Patch {patch_name}: {str(e)}", severity="error", timeout=5)
-
-            # Restore focus after error
-            try:
-                self.screen.focus()
-            except Exception:  # nosec B110
-                pass  # Silent fail OK - focus restoration is not critical
 
         except Exception as e:
             # === ERROR HANDLING: Other errors ===
@@ -612,12 +623,6 @@ class SyllableWalkerApp(App):
             import traceback
 
             traceback.print_exc()
-
-            # Restore focus after error
-            try:
-                self.screen.focus()
-            except Exception:  # nosec B110
-                pass  # Silent fail OK - focus restoration is not critical
 
     def action_help(self) -> None:
         """Show help information."""

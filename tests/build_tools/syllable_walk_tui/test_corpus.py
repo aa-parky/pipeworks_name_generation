@@ -499,13 +499,18 @@ class TestLoadAnnotatedData:
         ]
         (data_dir / "nltk_syllables_annotated.json").write_text(json.dumps(annotated))
 
-        data = load_annotated_data(corpus_dir)
+        data, metadata = load_annotated_data(corpus_dir)
 
         assert len(data) == 2
         assert data[0]["syllable"] == "hel"
         assert data[0]["frequency"] == 10
         assert "features" in data[0]
         assert isinstance(data[0]["features"], dict)
+
+        # Verify metadata is returned
+        assert metadata["source"] in ("sqlite", "json")
+        assert "file_name" in metadata
+        assert "load_time_ms" in metadata
 
     def test_load_pyphen_annotated_data(self, tmp_path):
         """Test loading Pyphen annotated data successfully."""
@@ -541,11 +546,15 @@ class TestLoadAnnotatedData:
         ]
         (data_dir / "pyphen_syllables_annotated.json").write_text(json.dumps(annotated))
 
-        data = load_annotated_data(corpus_dir)
+        data, metadata = load_annotated_data(corpus_dir)
 
         assert len(data) == 2
         assert data[0]["syllable"] == "py"
         assert data[1]["syllable"] == "phen"
+
+        # Verify metadata
+        assert metadata["source"] in ("sqlite", "json")
+        assert "file_name" in metadata
 
     def test_load_annotated_data_invalid_directory(self, tmp_path):
         """Test loading from invalid directory raises ValueError."""
@@ -566,7 +575,7 @@ class TestLoadAnnotatedData:
         (corpus_dir / "nltk_syllables_unique.txt").write_text("test\n")
         (corpus_dir / "nltk_syllables_frequencies.json").write_text(json.dumps({"test": 1}))
 
-        with pytest.raises(FileNotFoundError, match="Annotated data file not found"):
+        with pytest.raises(FileNotFoundError, match="No annotated data found"):
             load_annotated_data(corpus_dir)
 
     def test_load_annotated_data_invalid_json(self, tmp_path):
@@ -651,8 +660,9 @@ class TestLoadAnnotatedData:
         (data_dir / "nltk_syllables_annotated.json").write_text(json.dumps(nltk_annotated))
         (data_dir / "pyphen_syllables_annotated.json").write_text(json.dumps(pyphen_annotated))
 
-        data = load_annotated_data(corpus_dir)
+        data, metadata = load_annotated_data(corpus_dir)
 
         # Should load NLTK (preferred)
         assert len(data) == 1
         assert data[0]["syllable"] == "nltk"
+        assert metadata["source"] in ("sqlite", "json")
