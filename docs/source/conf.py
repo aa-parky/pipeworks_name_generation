@@ -77,6 +77,24 @@ napoleon_attr_annotations = True
 autodoc_typehints = "description"
 autodoc_typehints_description_target = "documented"
 
+# -- Autodoc mock imports ----------------------------------------------------
+# Mock heavy dependencies that aren't needed for documentation builds
+# This prevents import errors during sphinx-build when optional dependencies
+# (like textual for TUI) aren't installed in the docs environment
+autodoc_mock_imports = [
+    "textual",
+    "textual.app",
+    "textual.binding",
+    "textual.containers",
+    "textual.css.query",
+    "textual.events",
+    "textual.message",
+    "textual.reactive",
+    "textual.screen",
+    "textual.widget",
+    "textual.widgets",
+]
+
 # -- Intersphinx mapping -----------------------------------------------------
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
