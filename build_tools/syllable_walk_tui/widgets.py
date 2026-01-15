@@ -766,5 +766,8 @@ class ProfileOption(Static):
 
     def set_selected(self, selected: bool) -> None:
         """Update selection state and refresh display."""
+        self.app.notify(
+            f"DEBUG: set_selected on {self.profile_name} (id={self.id}): {self.is_selected} -> {selected}"
+        )
         self.is_selected = selected
         self.refresh()

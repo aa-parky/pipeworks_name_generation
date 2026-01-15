@@ -992,7 +992,11 @@ class SyllableWalkerApp(App):
         for profile_key in ["clerical", "dialect", "goblin", "ritual", "custom"]:
             try:
                 option = self.query_one(f"#profile-{profile_key}-{patch_name}", ProfileOption)
-                option.set_selected(profile_key == profile_name)
+                should_select = profile_key == profile_name
+                self.notify(
+                    f"DEBUG: Setting {profile_key} selected={should_select} (target={profile_name})"
+                )
+                option.set_selected(should_select)
             except Exception:  # nosec B110, B112 - Widget query can fail safely
                 # Widget not found during initialization, ignore
                 pass
