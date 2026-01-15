@@ -969,6 +969,11 @@ class SyllableWalkerApp(App):
     @on(ProfileOption.Selected)
     def on_profile_selected(self, event: ProfileOption.Selected) -> None:
         """Handle profile option selection (radio button click)."""
+        # Debug: Log what was received
+        self.notify(
+            f"DEBUG: on_profile_selected - profile={event.profile_name}, widget_id={event.widget_id}"
+        )
+
         # Parse widget ID to determine patch
         # Format: "profile-<profile_name>-<patch>" e.g., "profile-clerical-A"
         widget_id = event.widget_id
