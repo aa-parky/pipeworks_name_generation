@@ -443,17 +443,19 @@ class SyllableWalkerApp(App):
         """
         Handle app mount event.
 
-        Disables focus on container widgets to keep tab navigation clean.
+        NOTE: Previously disabled focus on container widgets, but this broke Textual's
+        natural hierarchical tab traversal. Containers don't actually capture focus
+        (users tab through children), so leaving them focusable allows proper tab order.
         """
-        # Disable focus on scroll containers - they still scroll, but don't capture focus
-        for scroll_container in self.query(VerticalScroll):
-            scroll_container.can_focus = False
-
-        # Disable focus on panel containers to prevent them capturing tab navigation
-        for patch_panel in self.query(PatchPanel):
-            patch_panel.can_focus = False
-        for stats_panel in self.query(StatsPanel):
-            stats_panel.can_focus = False
+        # REMOVED: Focus disabling on containers - breaks tab navigation order
+        # for scroll_container in self.query(VerticalScroll):
+        #     scroll_container.can_focus = False
+        #
+        # for patch_panel in self.query(PatchPanel):
+        #     patch_panel.can_focus = False
+        # for stats_panel in self.query(StatsPanel):
+        #     stats_panel.can_focus = False
+        pass
 
     @on(Button.Pressed, "#select-corpus-A")
     def on_button_select_corpus_a(self) -> None:

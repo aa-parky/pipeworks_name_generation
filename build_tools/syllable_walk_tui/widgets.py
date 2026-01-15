@@ -752,11 +752,13 @@ class ProfileOption(Static):
         """Action: Select this profile option (Enter/Space)."""
         if not self.is_selected:
             self.post_message(self.Selected(self.profile_name, self.id))
+            self.blur()  # Release focus after selection to prevent event routing issues
 
     def on_click(self) -> None:
         """Handle click on this profile option."""
         if not self.is_selected:
             self.post_message(self.Selected(self.profile_name, self.id))
+            self.blur()  # Release focus after selection to prevent event routing issues
 
     def set_selected(self, selected: bool) -> None:
         """Update selection state and refresh display."""
