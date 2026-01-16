@@ -67,6 +67,7 @@ class PatchState:
     temperature: float = 0.7  # Exploration randomness (0.1-5.0)
     frequency_weight: float = 0.0  # Bias toward common (+) or rare (-) (-2.0 to 2.0)
     neighbor_limit: int = 10  # Candidate pool size per step
+    walk_count: int = 2  # Number of walks to generate (1-20, default 2 for exploration)
     outputs: list[str] = field(default_factory=list)
 
     def __post_init__(self):

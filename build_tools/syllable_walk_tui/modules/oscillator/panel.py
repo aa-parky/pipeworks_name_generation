@@ -150,15 +150,18 @@ class OscillatorPanel(Static):
 
         yield Label("", classes="spacer")
 
-        # Generate button - triggers walk generation using current patch parameters
-        # Event handled in core/app.py via on_button_generate_a/b methods
-        yield Button("Generate Walks", id=f"generate-{self.patch_name}", variant="primary")
+        # Output count - how many walks to generate (default 2 for focused exploration)
+        yield IntSpinner(
+            "Walk Count",
+            value=2,
+            min_val=1,
+            max_val=20,
+            id=f"walk-count-{self.patch_name}",
+        )
 
         yield Label("", classes="spacer")
-        yield Label("OUTPUT (10)", classes="section-header")
-        yield Label("────────────────────", classes="divider")
-        # Output display - updated by _generate_walks_for_patch() after generation
-        # Shows formatted walk sequences: "syl1 → syl2 → syl3 → ..."
-        yield Label(
-            "(no generations yet)", id=f"output-{self.patch_name}", classes="output-placeholder"
-        )
+
+        # Generate button - triggers walk generation using current patch parameters
+        # Event handled in core/app.py via on_button_generate_a/b methods
+        # Results displayed in center panel (StatsPanel), not here
+        yield Button("Generate Walks", id=f"generate-{self.patch_name}", variant="primary")

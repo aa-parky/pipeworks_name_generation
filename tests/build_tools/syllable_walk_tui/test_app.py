@@ -253,11 +253,11 @@ class TestPatchPanel:
 
 
 class TestStatsPanel:
-    """Tests for StatsPanel widget."""
+    """Tests for StatsPanel widget (walk output display)."""
 
     @pytest.mark.asyncio
     async def test_compose_creates_widgets(self):
-        """Test that StatsPanel creates expected child widgets."""
+        """Test that StatsPanel creates expected child widgets for walk output."""
         from textual.app import App
 
         class TestApp(App):
@@ -265,13 +265,18 @@ class TestStatsPanel:
                 yield StatsPanel()
 
         async with TestApp().run_test() as pilot:
-            # Should have stats header
+            # Should have walk output labels
             stats_labels = pilot.app.query(Label)
             assert len(stats_labels) > 0
 
-            # Check for "COMPARISON STATS" header
-            header_found = any("COMPARISON STATS" in str(label.render()) for label in stats_labels)
-            assert header_found
+            # Check for "PATCH A" and "PATCH B" headers (walk output display)
+            labels_text = [str(label.render()) for label in stats_labels]
+            assert any("PATCH A" in text for text in labels_text)
+            assert any("PATCH B" in text for text in labels_text)
+
+            # Check for walk output placeholders by ID
+            assert pilot.app.query_one("#walks-output-A")
+            assert pilot.app.query_one("#walks-output-B")
 
 
 class TestCorpusSelectionFlow:

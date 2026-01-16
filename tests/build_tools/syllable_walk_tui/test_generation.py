@@ -111,8 +111,8 @@ async def test_generation_creates_walks(sample_corpus):
         pilot.app._generate_walks_for_patch("A")  # type: ignore[attr-defined]
         await pilot.pause(2.0)  # Wait for walker initialization + generation
 
-        # Check that walks were generated
-        assert len(pilot.app.state.patch_a.outputs) == 10  # type: ignore[attr-defined]
+        # Check that walks were generated (default walk_count is 2)
+        assert len(pilot.app.state.patch_a.outputs) == 2  # type: ignore[attr-defined]
 
         # Check walk format (should have arrows)
         for walk in pilot.app.state.patch_a.outputs:  # type: ignore[attr-defined]
@@ -157,15 +157,15 @@ async def test_output_display_updates(sample_corpus):
         pilot.app.state.patch_a.syllables = ["ka", "ki", "ta"]  # type: ignore[attr-defined]
         pilot.app.state.patch_a.frequencies = {"ka": 100, "ki": 80, "ta": 90}  # type: ignore[attr-defined]
 
-        # Get output label before generation
-        output_label = pilot.app.query_one("#output-A")  # type: ignore[attr-defined]
+        # Get output label before generation (now in center panel)
+        output_label = pilot.app.query_one("#walks-output-A")  # type: ignore[attr-defined]
         initial_text = str(output_label.render())
 
         # Generate using direct method call (button may be scrolled out of view)
         pilot.app._generate_walks_for_patch("A")  # type: ignore[attr-defined]
         await pilot.pause(2.0)
 
-        # Check that output label changed
+        # Check that output label changed (walks now in center panel)
         final_text = str(output_label.render())
         assert final_text != initial_text
         assert "→" in final_text

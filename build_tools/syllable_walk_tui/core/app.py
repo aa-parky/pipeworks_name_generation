@@ -152,6 +152,12 @@ class SyllableWalkerApp(App):
         text-style: none;
         margin-bottom: 1;
     }
+
+    .corpus-label {
+        color: $text-muted;
+        text-style: italic;
+        margin-bottom: 0;
+    }
     """
 
     def __init__(self):
@@ -270,9 +276,9 @@ class SyllableWalkerApp(App):
                 os.unlink(temp_path)
                 return
 
-            # Generate 10 walks
+            # Generate walks based on walk_count parameter
             walks = []
-            for i in range(10):
+            for i in range(patch.walk_count):
                 # Pick random starting syllable
                 start = patch.rng.choice(valid_syllables)
 
@@ -293,8 +299,8 @@ class SyllableWalkerApp(App):
             # Store in patch state
             patch.outputs = walks
 
-            # Update UI - find output label and update it
-            output_label = self.query_one(f"#output-{patch_name}", Label)
+            # Update center panel - show walks with corpus provenance
+            output_label = self.query_one(f"#walks-output-{patch_name}", Label)
             output_label.update("\n".join(walks))
             output_label.remove_class("output-placeholder")
 
@@ -414,6 +420,15 @@ class SyllableWalkerApp(App):
                         except Exception as e:
                             # Log UI update errors but don't fail
                             print(f"Warning: Could not update status label: {e}")
+
+                        # Update center panel corpus label with directory name and type
+                        try:
+                            corpus_label = self.query_one(f"#walks-corpus-{patch_name}", Label)
+                            dir_name = result.name  # e.g., "20260110_115601_nltk"
+                            corpus_label.update(f"{dir_name} ({corpus_type})")
+                            corpus_label.remove_class("output-placeholder")
+                        except Exception as e:
+                            print(f"Warning: Could not update center corpus label: {e}")
 
                         # Notify user that quick metadata loaded successfully
                         self.notify(
@@ -764,6 +779,8 @@ class SyllableWalkerApp(App):
                 self._switch_to_custom_mode(patch_name, patch)
         elif param_name == "neighbors":
             patch.neighbor_limit = event.value
+        elif param_name == "walk-count":
+            patch.walk_count = event.value
 
     @on(FloatSlider.Changed)
     def on_float_slider_changed(self, event: FloatSlider.Changed) -> None:
