@@ -6,9 +6,12 @@ system. This is a **build-time tool only** - not used during runtime name genera
 
 Features:
 - Side-by-side patch configuration (dual oscillator comparison)
-- Keyboard-first navigation (HJKL + arrow keys)
+- Center panel walk output with corpus provenance
+- Configurable walk count per patch (default 2, "less is more")
+- Profile-based parameter presets (clerical, dialect, goblin, ritual)
+- Quick corpus selection with number keys (1/2)
+- Keyboard-first navigation with Tab and vi-style keys
 - Real-time phonetic exploration
-- Configurable keybindings
 
 Usage:
     python -m build_tools.syllable_walk_tui
@@ -19,4 +22,4 @@ Design Philosophy:
     interactive parameter tweaking.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.5.0"

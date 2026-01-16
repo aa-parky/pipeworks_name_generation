@@ -24,10 +24,12 @@ rather than generating specific outputs.
 **Key Features:**
 
 - Side-by-side patch configuration (dual oscillator comparison)
+- Center panel walk output display with corpus provenance
+- Configurable walk count per patch (default 2, "less is more")
 - Modal screens for blended walks and analysis (v/a keys)
-- Keyboard-first navigation (HJKL + arrow keys)
+- Keyboard-first navigation with Tab and arrow keys
 - Real-time phonetic exploration with profile selection
-- Configurable keybindings (TOML-based)
+- Quick corpus selection with number keys (1/2)
 - Corpus directory selection and browsing
 - Live syllable walk generation
 
@@ -106,14 +108,29 @@ The Syllable Walker TUI is an interactive exploration tool and does not produce
 file-based outputs. Instead, it enables real-time phonetic exploration through
 the terminal interface.
 
-**Live Walk Display:**
+**Center Panel Walk Display:**
 
-Generated walks are displayed in the TUI interface with:
+Generated walks are displayed in the center panel with corpus provenance:
 
-- Syllable sequence (visual representation of the walk)
-- Phonetic features for each syllable
-- Frequency information
-- Step-by-step progression details
+.. code-block:: text
+
+    PATCH A
+    20260110_115453_pyphen (Pyphen)
+    ────────────────────
+    ka → ki → ta → ka → ti → ko
+    ma → mi → na → ni → mo → no
+
+    PATCH B
+    20260110_115601_nltk (NLTK)
+    ────────────────────
+    bra → kla → gal → sta → pla → tra
+    clem → gism → lents → rovn → pus → cha
+
+**Walk Count:**
+
+Each patch has a configurable walk count (default 2, range 1-20). The "less is more"
+approach encourages focused exploration - start with 2 walks to *feel* the phonetic
+space before generating more.
 
 **Future Enhancement:**
 
@@ -182,6 +199,10 @@ Keyboard Shortcuts
      - Quit application
    * - ``?`` / ``F1``
      - Show help
+   * - ``1``
+     - Select corpus directory for Patch A
+   * - ``2``
+     - Select corpus directory for Patch B
 
 **Modal Screens:**
 
@@ -206,18 +227,12 @@ Keyboard Shortcuts
 
    * - Key(s)
      - Action
-   * - ``k`` / ``↑``
-     - Move up
-   * - ``j`` / ``↓``
-     - Move down
-   * - ``h`` / ``←``
-     - Move left
-   * - ``l`` / ``→``
-     - Move right
-   * - ``Tab`` / ``Ctrl+N``
-     - Next panel
-   * - ``Shift+Tab`` / ``Ctrl+P``
-     - Previous panel
+   * - ``Tab``
+     - Next control
+   * - ``Shift+Tab``
+     - Previous control
+   * - ``hjkl``
+     - Vi-style navigation in corpus browser
 
 **Control Actions:**
 
@@ -228,83 +243,31 @@ Keyboard Shortcuts
    * - Key(s)
      - Action
    * - ``Enter`` / ``Space``
-     - Activate control
-   * - ``+`` / ``=`` / ``]``
-     - Increment value
-   * - ``-`` / ``[``
-     - Decrement value
-
-**Patch Operations:**
-
-.. list-table::
-   :header-rows: 1
-   :widths: 25 75
-
-   * - Key(s)
-     - Action
-   * - ``g`` / ``F5``
-     - Generate walk
-   * - ``y`` / ``Ctrl+C``
-     - Copy patch configuration
-   * - ``p`` / ``Ctrl+V``
-     - Paste patch configuration
+     - Select profile option
+   * - ``+`` / ``=`` / ``j`` / ``↓``
+     - Increment spinner/slider value
+   * - ``-`` / ``_`` / ``k`` / ``↑``
+     - Decrement spinner/slider value
    * - ``r``
-     - Reset patch to defaults
-   * - ``x``
-     - Swap patches A and B
+     - Generate random seed (when seed input focused)
 
 Keybinding Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-All keyboard shortcuts can be customized via TOML configuration file.
+Keybindings are currently defined in the application code. Custom keybinding
+configuration via TOML file is planned for a future release.
 
-**Configuration Location:**
+**Configuration Location (planned):**
 
 ``~/.config/pipeworks_tui/keybindings.toml``
 
-**Example Configuration:**
+**Current Defaults:**
 
-.. code-block:: toml
+The current keybindings are designed for keyboard efficiency with vi-style
+navigation in the corpus browser and intuitive shortcuts for common actions.
 
-   [keybindings.global]
-   quit = ["q", "ctrl+q"]
-   help = ["question_mark", "f1"]
-
-   [keybindings.modals]
-   blended_walk = ["v"]
-   analysis = ["a"]
-   close_modal = ["escape"]
-
-   [keybindings.navigation]
-   up = ["k", "up"]
-   down = ["j", "down"]
-   left = ["h", "left"]
-   right = ["l", "right"]
-   next_panel = ["tab", "ctrl+n"]
-   prev_panel = ["shift+tab", "ctrl+p"]
-
-   [keybindings.controls]
-   activate = ["enter", "space"]
-   increment = ["plus", "equal", "right_square_bracket"]
-   decrement = ["minus", "left_square_bracket"]
-
-   [keybindings.patch]
-   generate = ["g", "f5"]
-   copy = ["y", "ctrl+c"]
-   paste = ["p", "ctrl+v"]
-   reset = ["r"]
-   swap = ["x"]
-
-**Keybinding Conflicts:**
-
-The TUI automatically detects keybinding conflicts within each context and
-displays warnings on startup. If conflicts are detected, the first binding
-in the list takes precedence.
-
-**Fallback to Defaults:**
-
-If the configuration file doesn't exist or has errors, the TUI falls back
-to sensible defaults (shown above).
+**Note:** Keybindings use Textual's priority system, so global shortcuts like
+``q`` and ``v`` work even when controls have focus.
 
 Corpus Directory Selection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
