@@ -23,9 +23,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # Re-export from shared package
-from build_tools.tui_common.services.config import TOMLI_AVAILABLE
+from build_tools.tui_common.services.config import (
+    TOMLI_AVAILABLE,
+    detect_conflicts,
+    load_config_file,
+    merge_config,
+)
 from build_tools.tui_common.services.config import KeybindingConfig as BaseKeybindingConfig
-from build_tools.tui_common.services.config import detect_conflicts, load_config_file, merge_config
 
 
 @dataclass

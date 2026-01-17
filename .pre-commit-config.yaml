@@ -39,13 +39,14 @@ repos:
     args: [--pytest-test-first]
   - id: requirements-txt-fixer
 
-  # Python import sorting
-- repo: https://github.com/pycqa/isort
-  rev: 5.13.2
-  hooks:
-  - id: isort
-    name: isort (python)
-    args: [--profile, black, --line-length, '100']
+  # Python import sorting (disabled - ruff handles imports via "I" rule)
+  # Note: isort and ruff have conflicting import styles, so we use ruff only
+  # - repo: https://github.com/pycqa/isort
+  #   rev: 5.13.2
+  #   hooks:
+  #   - id: isort
+  #     name: isort (python)
+  #     args: [--profile, black, --line-length, '100']
 
   # Python code formatting with Black
 - repo: https://github.com/psf/black
