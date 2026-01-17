@@ -328,6 +328,158 @@ def compute_feature_saturation_metrics(
 
 
 # =============================================================================
+# Terrain Metrics (Phonaesthetic Axes)
+# =============================================================================
+
+# Axis weights derived from phonaesthetic analysis
+# See: _working/sfa_shapes_terrain_map.md for rationale
+
+# Axis 1: Shape (Round ↔ Jagged) - Bouba/Kiki dimension
+SHAPE_WEIGHTS: dict[str, float] = {
+    "contains_plosive": 1.0,  # Full weight toward Jagged
+    "ends_with_stop": 1.0,
+    "starts_with_heavy_cluster": 0.8,
+    "contains_fricative": 0.3,  # Soft texture, not defining
+}
+
+# Axis 2: Craft (Flowing ↔ Worked) - Sung/Forged dimension
+CRAFT_WEIGHTS: dict[str, float] = {
+    "contains_liquid": -1.0,  # Toward Flowing
+    "contains_nasal": -0.8,
+    "starts_with_cluster": 1.0,  # Toward Worked
+    "starts_with_heavy_cluster": 0.8,
+    "contains_fricative": 0.4,  # Conditional intensifier
+}
+
+# Axis 3: Space (Open ↔ Dense) - Valley/Workshop dimension
+SPACE_WEIGHTS: dict[str, float] = {
+    "ends_with_vowel": -1.0,  # Toward Open
+    "starts_with_vowel": -0.8,
+    "long_vowel": -0.6,
+    "short_vowel": 0.6,  # Toward Dense
+}
+
+
+@dataclass(frozen=True)
+class TerrainMetrics:
+    """
+    Phonaesthetic terrain metrics describing corpus character.
+
+    Three axes derived from feature saturation percentages:
+    - Shape: Round (0.0) ↔ Jagged (1.0) - Bouba/Kiki dimension
+    - Craft: Flowing (0.0) ↔ Worked (1.0) - Sung/Forged dimension
+    - Space: Open (0.0) ↔ Dense (1.0) - Valley/Workshop dimension
+
+    Scores are normalized to 0.0-1.0 range where 0.5 is neutral.
+
+    Attributes:
+        shape_score: Position on Round↔Jagged axis (0.0-1.0)
+        craft_score: Position on Flowing↔Worked axis (0.0-1.0)
+        space_score: Position on Open↔Dense axis (0.0-1.0)
+        shape_label: Human-readable label for shape position
+        craft_label: Human-readable label for craft position
+        space_label: Human-readable label for space position
+    """
+
+    shape_score: float
+    craft_score: float
+    space_score: float
+    shape_label: str
+    craft_label: str
+    space_label: str
+
+
+def _compute_axis_score(
+    feature_saturation: FeatureSaturationMetrics,
+    weights: dict[str, float],
+) -> float:
+    """
+    Compute a single axis score from weighted feature percentages.
+
+    Args:
+        feature_saturation: Feature saturation metrics
+        weights: Dict mapping feature names to weights (positive = high end, negative = low end)
+
+    Returns:
+        Score normalized to 0.0-1.0 range (0.5 = neutral)
+    """
+    # Compute weighted sum of feature percentages (as 0-1 values)
+    weighted_sum = 0.0
+    total_weight = 0.0
+
+    for feature_name, weight in weights.items():
+        if feature_name in feature_saturation.by_name:
+            pct = feature_saturation.by_name[feature_name].true_percentage / 100.0
+            weighted_sum += pct * weight
+            total_weight += abs(weight)
+
+    if total_weight == 0:
+        return 0.5  # Neutral if no features match
+
+    # Normalize: weighted_sum can range from -total_weight to +total_weight
+    # Map to 0.0-1.0 where 0.5 is neutral
+    normalized = (weighted_sum / total_weight + 1.0) / 2.0
+
+    # Clamp to valid range
+    return max(0.0, min(1.0, normalized))
+
+
+def _score_to_label(score: float, low_label: str, high_label: str) -> str:
+    """
+    Convert a 0-1 score to a human-readable label.
+
+    Args:
+        score: Value from 0.0 to 1.0
+        low_label: Label for low end (e.g., "ROUND")
+        high_label: Label for high end (e.g., "JAGGED")
+
+    Returns:
+        Appropriate label based on score position
+    """
+    if score < 0.35:
+        return low_label
+    elif score > 0.65:
+        return high_label
+    else:
+        return "BALANCED"
+
+
+def compute_terrain_metrics(
+    feature_saturation: FeatureSaturationMetrics,
+) -> TerrainMetrics:
+    """
+    Compute phonaesthetic terrain metrics from feature saturation.
+
+    Derives three axis scores representing the corpus's position in
+    phonaesthetic space. These are descriptive, not prescriptive -
+    they characterize the acoustic terrain without imposing meaning.
+
+    Args:
+        feature_saturation: Computed feature saturation metrics
+
+    Returns:
+        TerrainMetrics with scores and labels for all three axes
+
+    Example:
+        >>> terrain = compute_terrain_metrics(feature_saturation)
+        >>> print(f"Shape: {terrain.shape_score:.2f} ({terrain.shape_label})")
+        >>> print(f"Craft: {terrain.craft_score:.2f} ({terrain.craft_label})")
+    """
+    shape_score = _compute_axis_score(feature_saturation, SHAPE_WEIGHTS)
+    craft_score = _compute_axis_score(feature_saturation, CRAFT_WEIGHTS)
+    space_score = _compute_axis_score(feature_saturation, SPACE_WEIGHTS)
+
+    return TerrainMetrics(
+        shape_score=shape_score,
+        craft_score=craft_score,
+        space_score=space_score,
+        shape_label=_score_to_label(shape_score, "ROUND", "JAGGED"),
+        craft_label=_score_to_label(craft_score, "FLOWING", "WORKED"),
+        space_label=_score_to_label(space_score, "OPEN", "DENSE"),
+    )
+
+
+# =============================================================================
 # Composite Corpus Shape Metrics
 # =============================================================================
 
@@ -344,11 +496,13 @@ class CorpusShapeMetrics:
         inventory: Inventory metrics (counts, lengths)
         frequency: Frequency distribution metrics
         feature_saturation: Per-feature saturation metrics
+        terrain: Phonaesthetic terrain metrics (derived from features)
     """
 
     inventory: InventoryMetrics
     frequency: FrequencyMetrics
     feature_saturation: FeatureSaturationMetrics
+    terrain: TerrainMetrics
 
 
 def compute_corpus_shape_metrics(
@@ -379,9 +533,13 @@ def compute_corpus_shape_metrics(
         >>> print(f"Hapax legomena: {metrics.frequency.hapax_count}")
         >>> vowel_pct = metrics.feature_saturation.by_name['starts_with_vowel'].true_percentage
         >>> print(f"Starts with vowel: {vowel_pct:.1f}%")
+        >>> print(f"Terrain: {metrics.terrain.shape_label}")
     """
+    feature_saturation = compute_feature_saturation_metrics(annotated_data)
+
     return CorpusShapeMetrics(
         inventory=compute_inventory_metrics(syllables),
         frequency=compute_frequency_metrics(frequencies),
-        feature_saturation=compute_feature_saturation_metrics(annotated_data),
+        feature_saturation=feature_saturation,
+        terrain=compute_terrain_metrics(feature_saturation),
     )

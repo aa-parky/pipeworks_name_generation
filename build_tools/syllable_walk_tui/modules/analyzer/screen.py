@@ -15,7 +15,182 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Label
 
-from build_tools.syllable_walk_tui.services.metrics import CorpusShapeMetrics
+from build_tools.syllable_walk_tui.services.metrics import CorpusShapeMetrics, TerrainMetrics
+
+# Bar rendering constants
+BAR_WIDTH = 15  # Total width of the bar (filled + empty)
+BAR_FILLED = "█"
+BAR_EMPTY = "░"
+
+
+def render_terrain_bar(score: float, label: str) -> str:
+    """
+    Render a terrain axis as an ASCII bar.
+
+    Args:
+        score: Value from 0.0 to 1.0
+        label: Text label to show after the bar (e.g., "JAGGED")
+
+    Returns:
+        Formatted string like "████████░░░░░░░ JAGGED"
+    """
+    filled_count = int(score * BAR_WIDTH)
+    empty_count = BAR_WIDTH - filled_count
+    bar = BAR_FILLED * filled_count + BAR_EMPTY * empty_count
+    return f"{bar} {label}"
+
+
+class TerrainDisplay(Vertical):
+    """Widget for displaying terrain visualization bars."""
+
+    DEFAULT_CSS = """
+    TerrainDisplay {
+        width: auto;
+        height: auto;
+        padding: 0 1;
+    }
+
+    TerrainDisplay .terrain-header {
+        text-style: bold;
+        color: $accent;
+    }
+
+    TerrainDisplay .terrain-row {
+        color: $text;
+    }
+
+    TerrainDisplay .terrain-label {
+        color: $text-muted;
+    }
+    """
+
+    def __init__(self, terrain: TerrainMetrics | None = None) -> None:
+        """
+        Initialize terrain display.
+
+        Args:
+            terrain: Computed terrain metrics, or None if not available
+        """
+        super().__init__()
+        self.terrain = terrain
+
+    def compose(self) -> ComposeResult:
+        """Create terrain display layout."""
+        yield Label("TERRAIN", classes="terrain-header")
+        yield Label("", classes="terrain-row")
+
+        if self.terrain is None:
+            yield Label("(no data)", classes="terrain-label")
+            return
+
+        # Shape axis (Round ↔ Jagged)
+        yield Label("  Shape:", classes="terrain-label")
+        yield Label(
+            f"    {render_terrain_bar(self.terrain.shape_score, self.terrain.shape_label)}",
+            classes="terrain-row",
+        )
+
+        # Craft axis (Flowing ↔ Worked)
+        yield Label("  Craft:", classes="terrain-label")
+        yield Label(
+            f"    {render_terrain_bar(self.terrain.craft_score, self.terrain.craft_label)}",
+            classes="terrain-row",
+        )
+
+        # Space axis (Open ↔ Dense)
+        yield Label("  Space:", classes="terrain-label")
+        yield Label(
+            f"    {render_terrain_bar(self.terrain.space_score, self.terrain.space_label)}",
+            classes="terrain-row",
+        )
+
+
+class FeatureSaturationDisplay(Vertical):
+    """Widget for displaying feature saturation metrics."""
+
+    DEFAULT_CSS = """
+    FeatureSaturationDisplay {
+        width: auto;
+        height: auto;
+    }
+
+    FeatureSaturationDisplay .feat-header {
+        text-style: bold;
+        color: $text;
+    }
+
+    FeatureSaturationDisplay .feat-row {
+        color: $text;
+    }
+
+    FeatureSaturationDisplay .feat-label {
+        color: $text-muted;
+    }
+    """
+
+    def __init__(self, metrics: CorpusShapeMetrics | None = None) -> None:
+        """Initialize feature saturation display."""
+        super().__init__()
+        self.metrics = metrics
+
+    def compose(self) -> ComposeResult:
+        """Create feature saturation display."""
+        if self.metrics is None:
+            yield Label("(no data)", classes="feat-label")
+            return
+
+        feat = self.metrics.feature_saturation
+
+        yield Label("FEATURE SATURATION", classes="feat-header")
+        yield Label(f"  Total analyzed:     {feat.total_syllables:,}", classes="feat-row")
+        yield Label("", classes="feat-row")
+
+        # Group features by category
+        onset_features = ["starts_with_vowel", "starts_with_cluster", "starts_with_heavy_cluster"]
+        internal_features = [
+            "contains_plosive",
+            "contains_fricative",
+            "contains_liquid",
+            "contains_nasal",
+        ]
+        nucleus_features = ["short_vowel", "long_vowel"]
+        coda_features = ["ends_with_vowel", "ends_with_nasal", "ends_with_stop"]
+
+        yield Label("  Onset:", classes="feat-label")
+        for name in onset_features:
+            fs = feat.by_name[name]
+            short_name = name.replace("starts_with_", "").replace("_", " ")
+            yield Label(
+                f"    {short_name:18} {fs.true_count:>6,} ({fs.true_percentage:5.1f}%)",
+                classes="feat-row",
+            )
+
+        yield Label("  Internal:", classes="feat-label")
+        for name in internal_features:
+            fs = feat.by_name[name]
+            short_name = name.replace("contains_", "").replace("_", " ")
+            yield Label(
+                f"    {short_name:18} {fs.true_count:>6,} ({fs.true_percentage:5.1f}%)",
+                classes="feat-row",
+            )
+
+        yield Label("  Nucleus:", classes="feat-label")
+        for name in nucleus_features:
+            fs = feat.by_name[name]
+            short_name = name.replace("_", " ")
+            yield Label(
+                f"    {short_name:18} {fs.true_count:>6,} ({fs.true_percentage:5.1f}%)",
+                classes="feat-row",
+            )
+
+        yield Label("  Coda:", classes="feat-label")
+        for name in coda_features:
+            fs = feat.by_name[name]
+            short_name = name.replace("ends_with_", "").replace("_", " ")
+            yield Label(
+                f"    {short_name:18} {fs.true_count:>6,} ({fs.true_percentage:5.1f}%)",
+                classes="feat-row",
+            )
 
 
 class MetricsDisplay(Vertical):
@@ -46,6 +221,11 @@ class MetricsDisplay(Vertical):
 
     MetricsDisplay .metrics-dim {
         color: $text-muted;
+    }
+
+    MetricsDisplay .feature-terrain-row {
+        height: auto;
+        margin-top: 1;
     }
     """
 
@@ -117,59 +297,10 @@ class MetricsDisplay(Vertical):
         for syl, count in freq.top_10[:5]:
             yield Label(f"    {syl}: {count:,}", classes="metrics-row")
 
-        # === FEATURE SATURATION ===
-        feat = self.metrics.feature_saturation
-        yield Label("FEATURE SATURATION", classes="metrics-subheader")
-        yield Label(f"  Total analyzed:     {feat.total_syllables:,}", classes="metrics-row")
-        yield Label("", classes="metrics-row")
-
-        # Display each feature with count and percentage
-        # Group by category for readability
-        onset_features = ["starts_with_vowel", "starts_with_cluster", "starts_with_heavy_cluster"]
-        internal_features = [
-            "contains_plosive",
-            "contains_fricative",
-            "contains_liquid",
-            "contains_nasal",
-        ]
-        nucleus_features = ["short_vowel", "long_vowel"]
-        coda_features = ["ends_with_vowel", "ends_with_nasal", "ends_with_stop"]
-
-        yield Label("  Onset:", classes="metrics-row")
-        for name in onset_features:
-            fs = feat.by_name[name]
-            short_name = name.replace("starts_with_", "").replace("_", " ")
-            yield Label(
-                f"    {short_name:18} {fs.true_count:>6,} ({fs.true_percentage:5.1f}%)",
-                classes="metrics-row",
-            )
-
-        yield Label("  Internal:", classes="metrics-row")
-        for name in internal_features:
-            fs = feat.by_name[name]
-            short_name = name.replace("contains_", "").replace("_", " ")
-            yield Label(
-                f"    {short_name:18} {fs.true_count:>6,} ({fs.true_percentage:5.1f}%)",
-                classes="metrics-row",
-            )
-
-        yield Label("  Nucleus:", classes="metrics-row")
-        for name in nucleus_features:
-            fs = feat.by_name[name]
-            short_name = name.replace("_", " ")
-            yield Label(
-                f"    {short_name:18} {fs.true_count:>6,} ({fs.true_percentage:5.1f}%)",
-                classes="metrics-row",
-            )
-
-        yield Label("  Coda:", classes="metrics-row")
-        for name in coda_features:
-            fs = feat.by_name[name]
-            short_name = name.replace("ends_with_", "").replace("_", " ")
-            yield Label(
-                f"    {short_name:18} {fs.true_count:>6,} ({fs.true_percentage:5.1f}%)",
-                classes="metrics-row",
-            )
+        # === FEATURE SATURATION + TERRAIN (side by side) ===
+        with Horizontal(classes="feature-terrain-row"):
+            yield FeatureSaturationDisplay(self.metrics)
+            yield TerrainDisplay(self.metrics.terrain)
 
 
 class AnalysisScreen(Screen):

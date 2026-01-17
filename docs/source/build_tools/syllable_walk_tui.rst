@@ -328,6 +328,46 @@ numerical data about corpus structure without interpretation.
 - Count and percentage of syllables with each feature
 - Grouped by category: Onset, Internal, Nucleus, Coda
 
+*Terrain Visualization:*
+
+Displayed alongside Feature Saturation, the Terrain visualization synthesizes
+phonetic features into three phonaesthetic axes:
+
+.. code-block:: text
+
+   TERRAIN
+
+     Shape:
+       ██████████░░░░░ JAGGED
+     Craft:
+       ████████░░░░░░░ WORKED
+     Space:
+       ████░░░░░░░░░░░ OPEN
+
+The three axes represent:
+
+- **Shape** (Round ↔ Jagged): The Bouba/Kiki dimension. Derived from plosives,
+  stops, heavy clusters, and fricatives. High scores indicate angular,
+  percussive sounds; low scores indicate soft, flowing sounds.
+
+- **Craft** (Flowing ↔ Worked): The Sung/Forged dimension. Derived from liquids,
+  nasals, and cluster density. High scores suggest "forged" names (worked,
+  effortful); low scores suggest "sung" names (smooth, natural).
+
+- **Space** (Open ↔ Dense): The Valley/Workshop dimension. Derived from vowel
+  features and syllable length distribution. High scores indicate dense,
+  compact syllables; low scores indicate open, expansive syllables.
+
+Labels are assigned based on score thresholds:
+
+- Score < 0.35: Low-end label (ROUND, FLOWING, OPEN)
+- Score 0.35-0.65: BALANCED
+- Score > 0.65: High-end label (JAGGED, WORKED, DENSE)
+
+These visualizations help users understand the **phonaesthetic terrain** a
+corpus inhabits - not prescribing how to use it, but describing what kind of
+acoustic character it naturally supports.
+
 **Why Corpus Shape Matters:**
 
 Understanding corpus shape is essential for effective syllable walks:
