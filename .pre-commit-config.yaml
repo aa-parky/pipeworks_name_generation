@@ -50,11 +50,11 @@ repos:
 
   # Python code formatting with Black
 - repo: https://github.com/psf/black
-  rev: 24.10.0
+  rev: 25.1.0
   hooks:
   - id: black
     language_version: python3.12
-    args: [--line-length, '100', --check, --diff]
+    args: [--line-length, '100']
 
   # Python linting with Ruff (fast alternative to flake8/pylint)
 - repo: https://github.com/astral-sh/ruff-pre-commit
