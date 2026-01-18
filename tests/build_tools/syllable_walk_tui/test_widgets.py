@@ -145,16 +145,16 @@ class TestCorpusBrowserScreen:
                 await self.push_screen(screen)
 
         async with TestApp().run_test() as pilot:
-            # Call validation directly to avoid Mock/Path platform issues
-            screen._validate_and_update_status(valid_nltk_corpus)
-
+            # Wait for any auto-expansion events to complete first
             await pilot.pause()
 
-            # Select button should now be enabled
+            # Now call validation - this will set the final state
+            screen._validate_and_update_status(valid_nltk_corpus)
+
+            # Assert immediately without another pause (which could trigger more events)
             select_button = screen.query_one("#select-button", Button)
             assert select_button.disabled is False
 
-            # Status should show valid
             status = screen.query_one("#validation-status", Static)
             assert "status-valid" in status.classes
 
@@ -172,16 +172,16 @@ class TestCorpusBrowserScreen:
                 await self.push_screen(screen)
 
         async with TestApp().run_test() as pilot:
-            # Call validation directly to avoid Mock/Path platform issues
-            screen._validate_and_update_status(invalid_corpus)
-
+            # Wait for any auto-expansion events to complete first
             await pilot.pause()
 
-            # Select button should remain disabled
+            # Now call validation - this will set the final state
+            screen._validate_and_update_status(invalid_corpus)
+
+            # Assert immediately without another pause
             select_button = screen.query_one("#select-button", Button)
             assert select_button.disabled is True
 
-            # Status should show invalid
             status = screen.query_one("#validation-status", Static)
             assert "status-invalid" in status.classes
 
@@ -281,12 +281,13 @@ class TestCorpusBrowserScreen:
                 await self.push_screen(screen)
 
         async with TestApp().run_test() as pilot:
-            # Call validation directly to avoid Mock/Path platform issues
-            screen._validate_and_update_status(valid_nltk_corpus)
-
+            # Wait for any auto-expansion events to complete first
             await pilot.pause()
 
-            # Check status text
+            # Now call validation - this will set the final state
+            screen._validate_and_update_status(valid_nltk_corpus)
+
+            # Assert immediately without another pause (which could trigger more events)
             status_text = screen.query_one("#status-text", Label)
             status_content = str(status_text.render())
 
@@ -305,12 +306,13 @@ class TestCorpusBrowserScreen:
                 await self.push_screen(screen)
 
         async with TestApp().run_test() as pilot:
-            # Call validation directly to avoid Mock/Path platform issues
-            screen._validate_and_update_status(invalid_corpus)
-
+            # Wait for any auto-expansion events to complete first
             await pilot.pause()
 
-            # Check status text
+            # Now call validation - this will set the final state
+            screen._validate_and_update_status(invalid_corpus)
+
+            # Assert immediately without another pause (which could trigger more events)
             status_text = screen.query_one("#status-text", Label)
             status_content = str(status_text.render())
 
@@ -328,12 +330,13 @@ class TestCorpusBrowserScreen:
                 await self.push_screen(screen)
 
         async with TestApp().run_test() as pilot:
-            # Call validation directly to avoid Mock/Path platform issues
-            screen._validate_and_update_status(valid_pyphen_corpus)
-
+            # Wait for any auto-expansion events to complete first
             await pilot.pause()
 
-            # Check status shows Pyphen
+            # Now call validation - this will set the final state
+            screen._validate_and_update_status(valid_pyphen_corpus)
+
+            # Assert immediately without another pause (which could trigger more events)
             status_text = screen.query_one("#status-text", Label)
             status_content = str(status_text.render())
 

@@ -532,12 +532,13 @@ class TestDirectoryBrowserScreen:
                 await self.push_screen(screen)
 
         async with TestApp().run_test() as pilot:
-            # Call validation directly to avoid Mock/Path platform issues
-            screen._validate_and_update_status(valid_directory)
-
+            # Wait for any auto-expansion events to complete first
             await pilot.pause()
 
-            # Select button should be enabled (directory has .txt files)
+            # Now call validation - this will set the final state
+            screen._validate_and_update_status(valid_directory)
+
+            # Assert immediately without another pause (which could trigger more events)
             select_button = screen.query_one("#select-button", Button)
             assert select_button.disabled is False
 
@@ -563,11 +564,13 @@ class TestDirectoryBrowserScreen:
                 await self.push_screen(screen)
 
         async with TestApp().run_test() as pilot:
-            # Call validation directly to avoid Mock/Path platform issues
-            screen._validate_and_update_status(empty_dir)
-
+            # Wait for any auto-expansion events to complete first
             await pilot.pause()
 
+            # Now call validation - this will set the final state
+            screen._validate_and_update_status(empty_dir)
+
+            # Assert immediately without another pause (which could trigger more events)
             select_button = screen.query_one("#select-button", Button)
             assert select_button.disabled is True
 
@@ -594,12 +597,13 @@ class TestDirectoryBrowserScreen:
                 await self.push_screen(screen)
 
         async with TestApp().run_test() as pilot:
-            # First ensure we're in an invalid state
-            screen._validate_and_update_status(empty_dir)
-
+            # Wait for any auto-expansion events to complete first
             await pilot.pause()
 
-            # Now the button should be disabled and status invalid
+            # Now call validation - this will set the final state
+            screen._validate_and_update_status(empty_dir)
+
+            # Assert immediately without another pause (which could trigger more events)
             select_button = screen.query_one("#select-button", Button)
             status = screen.query_one("#validation-status", Static)
 
@@ -629,12 +633,13 @@ class TestDirectoryBrowserScreen:
                 await self.push_screen(screen)
 
         async with TestApp().run_test() as pilot:
-            # Validate the directory directly to avoid Mock/Path platform issues
-            screen._validate_and_update_status(tmp_path)
-
+            # Wait for any auto-expansion events to complete first
             await pilot.pause()
 
-            # Verify directory is valid and selectable
+            # Now call validation - this will set the final state
+            screen._validate_and_update_status(tmp_path)
+
+            # Assert immediately without another pause (which could trigger more events)
             select_button = screen.query_one("#select-button", Button)
             assert select_button.disabled is False
 
