@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.0...pipeworks-name-generation-v0.5.1) (2026-01-18)
+
+
+### Features
+
+* **build_tools:** Extract shared TUI components and add pipeline_tui scaffold ([6dd1a6a](https://github.com/aa-parky/pipeworks_name_generation/commit/6dd1a6a508bdcd5d01dd9a1969c054f7fd90caef))
+* **pipeline_tui:** Implement Configure tab with full settings UI ([0deae0e](https://github.com/aa-parky/pipeworks_name_generation/commit/0deae0e48cb42bb0cc4b456011aeaf70cf43297f))
+* **syllable_walk_tui:** Add corpus shape metrics to analysis screen ([ab44145](https://github.com/aa-parky/pipeworks_name_generation/commit/ab441457247cc28ffb2efddb925b53b415d03d44))
+* **syllable_walk_tui:** Add database viewer modal for corpus inspection ([2e37014](https://github.com/aa-parky/pipeworks_name_generation/commit/2e37014d0682b96281ecadc6bcef44748e5a48cb))
+* **syllable_walk_tui:** Add terrain visualization to corpus shape metrics ([887b6b4](https://github.com/aa-parky/pipeworks_name_generation/commit/887b6b47b4e5fce40a04360773c566a82e26d4bd))
+* **tui:** Add pipeline execution, file selection, and navigation improvements ([3a05f60](https://github.com/aa-parky/pipeworks_name_generation/commit/3a05f600eb81cc62573332fd03cb8bf2bd7b0173))
+
+
+### Fixes
+
+* **ci:** Pin black to exact version 26.1.0 and reformat files ([51cc780](https://github.com/aa-parky/pipeworks_name_generation/commit/51cc780392cc046996247483ed217ab28cd22088))
+* **ci:** Pin black version to 25.1.0 for consistent formatting ([320150a](https://github.com/aa-parky/pipeworks_name_generation/commit/320150aa2d28331477f30892f1fe22132c44976b))
+* Resolve ruff linting errors and isort conflict ([89f1232](https://github.com/aa-parky/pipeworks_name_generation/commit/89f1232db6c0769c7516ea498c8d75cf228ace61))
+* **syllable_walk_tui:** Set nord as default theme for better contrast ([50a75a7](https://github.com/aa-parky/pipeworks_name_generation/commit/50a75a7cfe2a69af667e75368b2a7932fc53f989))
+* **tests:** Update syllable_walk_tui test for new browser error message ([d65f33e](https://github.com/aa-parky/pipeworks_name_generation/commit/d65f33e9e0a29812ac465136f0d339154bd378b3))
+* **tui:** Remove auto-validation from _expand_to_initial_dir ([19ac585](https://github.com/aa-parky/pipeworks_name_generation/commit/19ac5857026a843f708b694070cf37f7289bca61))
+
+
+### Internal Changes
+
+* **syllable_walk_tui:** Add dynamic suffixes to parameter controls ([37937c0](https://github.com/aa-parky/pipeworks_name_generation/commit/37937c0d3be924650b0d9aa903a91580e5336a86))
+
 ## [0.5.0](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.4.0...pipeworks-name-generation-v0.5.0) (2026-01-16)
 
 ### ⚠ BREAKING CHANGES
