@@ -195,7 +195,7 @@ Keyboard Shortcuts
 
    * - Key(s)
      - Action
-   * - ``q`` / ``Ctrl+Q``
+   * - ``Ctrl+Q``
      - Quit application
    * - ``?`` / ``F1``
      - Show help
@@ -216,6 +216,8 @@ Keyboard Shortcuts
      - Open Blended Walk modal screen
    * - ``a``
      - Open Analysis modal screen
+   * - ``w``
+     - Open Terrain Weights editor (from Analysis screen)
    * - ``d``
      - Open Database Viewer for Patch A
    * - ``D`` (Shift+d)
@@ -241,6 +243,8 @@ Keyboard Shortcuts
      - Toggle expand/collapse in browser
    * - ``Enter``
      - Select directory in browser
+   * - ``>`` (Shift+.)
+     - Toggle hidden files in browser
    * - ``Esc``
      - Cancel/close browser
 
@@ -375,6 +379,70 @@ Labels are assigned based on score thresholds:
 These visualizations help users understand the **phonaesthetic terrain** a
 corpus inhabits - not prescribing how to use it, but describing what kind of
 acoustic character it naturally supports.
+
+**Terrain Weights Editor:**
+
+Press ``w`` from the Analysis screen to open the Terrain Weights editor. This
+modal allows you to adjust the weights used to calculate terrain scores for
+each patch independently.
+
+.. code-block:: text
+
+   TERRAIN WEIGHTS
+   ─── PATCH A ───
+   Shape: liq:-0.8  nas:-0.6  v_end:-0.6  plo:+0.6  stop:+1.0  h_cl:+0.8  fri:+0.3
+   Craft: v_end:-1.0  v_sta:-0.8  lg_v:-0.6  clus:+1.0  h_cl:+0.8  sh_v:+0.4
+   Space: v_end:-1.0  v_sta:-0.8  lg_v:-0.6  sh_v:+0.6  stop:+0.6  n_end:+0.4
+
+   ─── PATCH B ───
+   ...
+
+   [Tab] navigate  [j/k] adjust  [r] reset  [q] close
+
+**Weights Editor Keybindings:**
+
+- ``Tab`` / ``Shift+Tab``: Navigate between weights
+- ``j`` / ``k``: Decrease / increase selected weight by 0.1
+- ``r``: Reset current patch's weights to defaults
+- ``q`` / ``Esc``: Close and apply changes
+
+Each patch maintains independent weights, allowing you to compare how different
+weight configurations affect terrain interpretation of the same corpus.
+
+.. caution::
+   **On Weight Tuning and "Forcing" Terrain Shape**
+
+   The terrain weights system is designed to **describe** phonaesthetic reality,
+   not to be tuned to produce desired results for specific corpora.
+
+   **Why this matters:**
+
+   If Patch A is 65% plosives and Patch B is 12%, the user should *feel* that
+   difference. Generating "round" names from Patch A means **fighting upstream**;
+   generating "jagged" names means **riding the current**. That tension *is* the
+   experience.
+
+   **Do NOT adjust weights to:**
+
+   - Make a jagged corpus appear round
+   - Force both patches to show the same terrain
+   - Flatten differences between corpora
+
+   **DO adjust weights when:**
+
+   - Testing alternative phonaesthetic models
+   - Calibrating for non-English corpora with different feature distributions
+   - Exploring how specific features contribute to each axis
+   - Validating that weights produce defensible phonaesthetic claims
+
+   **The principle:** Each weight should have a defensible rationale independent
+   of test outcomes. If test results seem "wrong", consider whether the
+   phonaesthetic claim is actually correct, or whether other features are
+   washing out the effect — not whether the weights need adjustment to make
+   tests "look right".
+
+   See ``_working/sfa_shapes_terrain_map.md`` for detailed calibration notes
+   and the phonaesthetic rationale behind default weights.
 
 **Why Corpus Shape Matters:**
 

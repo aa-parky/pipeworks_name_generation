@@ -33,6 +33,12 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from build_tools.syllable_walk_tui.services.terrain_weights import (
+    DEFAULT_TERRAIN_WEIGHTS,
+    AxisWeights,
+    TerrainWeights,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -331,33 +337,12 @@ def compute_feature_saturation_metrics(
 # Terrain Metrics (Phonaesthetic Axes)
 # =============================================================================
 
-# Axis weights derived from phonaesthetic analysis
-# See: _working/sfa_shapes_terrain_map.md for rationale
-
-# Axis 1: Shape (Round ↔ Jagged) - Bouba/Kiki dimension
-SHAPE_WEIGHTS: dict[str, float] = {
-    "contains_plosive": 1.0,  # Full weight toward Jagged
-    "ends_with_stop": 1.0,
-    "starts_with_heavy_cluster": 0.8,
-    "contains_fricative": 0.3,  # Soft texture, not defining
-}
-
-# Axis 2: Craft (Flowing ↔ Worked) - Sung/Forged dimension
-CRAFT_WEIGHTS: dict[str, float] = {
-    "contains_liquid": -1.0,  # Toward Flowing
-    "contains_nasal": -0.8,
-    "starts_with_cluster": 1.0,  # Toward Worked
-    "starts_with_heavy_cluster": 0.8,
-    "contains_fricative": 0.4,  # Conditional intensifier
-}
-
-# Axis 3: Space (Open ↔ Dense) - Valley/Workshop dimension
-SPACE_WEIGHTS: dict[str, float] = {
-    "ends_with_vowel": -1.0,  # Toward Open
-    "starts_with_vowel": -0.8,
-    "long_vowel": -0.6,
-    "short_vowel": 0.6,  # Toward Dense
-}
+# Weights are defined in terrain_weights.py with full phonaesthetic rationale.
+# See that module for documentation of each weight's justification.
+#
+# IMPORTANT: Each axis must be BIPOLAR - features pulling BOTH directions.
+# Without this, axes measure "Englishness" not phonaesthetic shape.
+# See Section 12 of _working/sfa_shapes_terrain_map.md for calibration findings.
 
 
 @dataclass(frozen=True)
@@ -391,14 +376,14 @@ class TerrainMetrics:
 
 def _compute_axis_score(
     feature_saturation: FeatureSaturationMetrics,
-    weights: dict[str, float],
+    axis_weights: AxisWeights,
 ) -> float:
     """
     Compute a single axis score from weighted feature percentages.
 
     Args:
         feature_saturation: Feature saturation metrics
-        weights: Dict mapping feature names to weights (positive = high end, negative = low end)
+        axis_weights: AxisWeights containing feature-to-weight mappings
 
     Returns:
         Score normalized to 0.0-1.0 range (0.5 = neutral)
@@ -407,7 +392,7 @@ def _compute_axis_score(
     weighted_sum = 0.0
     total_weight = 0.0
 
-    for feature_name, weight in weights.items():
+    for feature_name, weight in axis_weights.items():
         if feature_name in feature_saturation.by_name:
             pct = feature_saturation.by_name[feature_name].true_percentage / 100.0
             weighted_sum += pct * weight
@@ -446,6 +431,7 @@ def _score_to_label(score: float, low_label: str, high_label: str) -> str:
 
 def compute_terrain_metrics(
     feature_saturation: FeatureSaturationMetrics,
+    weights: TerrainWeights | None = None,
 ) -> TerrainMetrics:
     """
     Compute phonaesthetic terrain metrics from feature saturation.
@@ -456,6 +442,10 @@ def compute_terrain_metrics(
 
     Args:
         feature_saturation: Computed feature saturation metrics
+        weights: Optional TerrainWeights configuration. If None, uses
+                 DEFAULT_TERRAIN_WEIGHTS from terrain_weights module.
+                 Custom weights allow calibration for different phonaesthetic
+                 models or user preferences.
 
     Returns:
         TerrainMetrics with scores and labels for all three axes
@@ -464,10 +454,20 @@ def compute_terrain_metrics(
         >>> terrain = compute_terrain_metrics(feature_saturation)
         >>> print(f"Shape: {terrain.shape_score:.2f} ({terrain.shape_label})")
         >>> print(f"Craft: {terrain.craft_score:.2f} ({terrain.craft_label})")
+
+        # With custom weights:
+        >>> from build_tools.syllable_walk_tui.services.terrain_weights import (
+        ...     TerrainWeights, AxisWeights
+        ... )
+        >>> custom = TerrainWeights(shape=AxisWeights({"contains_plosive": 1.5}))
+        >>> terrain = compute_terrain_metrics(feature_saturation, weights=custom)
     """
-    shape_score = _compute_axis_score(feature_saturation, SHAPE_WEIGHTS)
-    craft_score = _compute_axis_score(feature_saturation, CRAFT_WEIGHTS)
-    space_score = _compute_axis_score(feature_saturation, SPACE_WEIGHTS)
+    if weights is None:
+        weights = DEFAULT_TERRAIN_WEIGHTS
+
+    shape_score = _compute_axis_score(feature_saturation, weights.shape)
+    craft_score = _compute_axis_score(feature_saturation, weights.craft)
+    space_score = _compute_axis_score(feature_saturation, weights.space)
 
     return TerrainMetrics(
         shape_score=shape_score,

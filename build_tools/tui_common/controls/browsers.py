@@ -51,6 +51,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DirectoryTree, Label, Static, Tree
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from textual.app import ComposeResult
 
 
@@ -60,6 +62,53 @@ if TYPE_CHECKING:
 # - type_label: Short label describing what was found (e.g., "corpus", "source")
 # - message: Human-readable message (error if invalid, description if valid)
 DirectoryValidator = Callable[[Path], tuple[bool, str, str]]
+
+
+class FilterableDirectoryTree(DirectoryTree):
+    """
+    DirectoryTree subclass that supports filtering hidden files.
+
+    By default, hidden files (those starting with '.') are not shown.
+    Toggle visibility with the ``show_hidden`` attribute.
+    """
+
+    def __init__(self, path: str, show_hidden: bool = False, **kwargs: Any) -> None:
+        """
+        Initialize filterable directory tree.
+
+        Args:
+            path: Root path for the tree
+            show_hidden: If True, show hidden files/directories
+            **kwargs: Additional arguments passed to DirectoryTree
+        """
+        super().__init__(path, **kwargs)
+        self._show_hidden = show_hidden
+
+    @property
+    def show_hidden(self) -> bool:
+        """Whether hidden files are shown."""
+        return self._show_hidden
+
+    @show_hidden.setter
+    def show_hidden(self, value: bool) -> None:
+        """Set hidden file visibility and reload tree."""
+        if self._show_hidden != value:
+            self._show_hidden = value
+            self.reload()
+
+    def filter_paths(self, paths: Iterable[Path]) -> Iterable[Path]:
+        """
+        Filter paths to optionally exclude hidden files.
+
+        Args:
+            paths: Iterable of paths to filter
+
+        Returns:
+            Filtered iterable of paths
+        """
+        if self._show_hidden:
+            return paths
+        return [p for p in paths if not p.name.startswith(".")]
 
 
 def default_validator(path: Path) -> tuple[bool, str, str]:
@@ -98,6 +147,7 @@ class DirectoryBrowserScreen(ModalScreen[Path | None]):
     - ``k`` / ``up``: Move cursor up
     - ``h`` / ``left``: Collapse directory
     - ``l`` / ``right``: Expand directory
+    - ``>`` (Shift+.): Toggle hidden files
 
     Attributes:
         browser_title: Header text displayed at top of modal
@@ -133,6 +183,7 @@ class DirectoryBrowserScreen(ModalScreen[Path | None]):
         ("space", "toggle_node", "Toggle"),
         ("enter", "select_node", "Select"),
         ("escape", "cancel", "Cancel"),
+        ("greater_than_sign", "toggle_hidden", "Toggle hidden"),
     ]
 
     # -------------------------------------------------------------------------
@@ -232,6 +283,7 @@ class DirectoryBrowserScreen(ModalScreen[Path | None]):
         self.root_dir = root_dir or Path.home()
         self.help_text = help_text or "Expand a directory to validate it. Click Select when valid."
         self.selected_path: Path | None = None
+        self.show_hidden = False
 
     def compose(self) -> ComposeResult:
         """
@@ -254,7 +306,9 @@ class DirectoryBrowserScreen(ModalScreen[Path | None]):
             yield Label(self.help_text or "", id="help-text")
 
             # Directory tree widget - use root_dir to allow navigating up
-            yield DirectoryTree(str(self.root_dir), id="directory-tree")
+            yield FilterableDirectoryTree(
+                str(self.root_dir), show_hidden=self.show_hidden, id="directory-tree"
+            )
 
             # Validation status area
             with Static(id="validation-status", classes="status-none"):
@@ -536,3 +590,11 @@ class DirectoryBrowserScreen(ModalScreen[Path | None]):
     def action_cancel(self) -> None:
         """Cancel and close the dialog (escape key)."""
         self.dismiss(None)
+
+    def action_toggle_hidden(self) -> None:
+        """Toggle visibility of hidden files (> key)."""
+        self.show_hidden = not self.show_hidden
+        tree = self.query_one("#directory-tree", FilterableDirectoryTree)
+        tree.show_hidden = self.show_hidden
+        status = "shown" if self.show_hidden else "hidden"
+        self.notify(f"Hidden files: {status}", timeout=1.5)

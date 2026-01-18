@@ -73,8 +73,8 @@ class SyllableWalkerApp(App):
     # Class-level bindings with priority=True to work even with focused widgets
     # Using Binding class explicitly to enable priority (allows bindings to fire
     # even when child widgets like IntSpinner/FloatSlider/SeedInput have focus)
+    # NOTE: Only ctrl+q quits the app globally. Screens can use 'q' to close themselves.
     BINDINGS = [
-        Binding("q", "quit", "Quit", priority=True),
         Binding("ctrl+q", "quit", "Quit", priority=True),
         Binding("question_mark", "help", "Help", priority=True),
         Binding("f1", "help", "Help", priority=True),
@@ -339,7 +339,14 @@ class SyllableWalkerApp(App):
         metrics_a = self._compute_metrics_for_patch(self.state.patch_a)
         metrics_b = self._compute_metrics_for_patch(self.state.patch_b)
 
-        self.push_screen(AnalysisScreen(metrics_a=metrics_a, metrics_b=metrics_b))
+        self.push_screen(
+            AnalysisScreen(
+                metrics_a=metrics_a,
+                metrics_b=metrics_b,
+                corpus_path_a=self.state.patch_a.corpus_dir,
+                corpus_path_b=self.state.patch_b.corpus_dir,
+            )
+        )
 
     def _compute_metrics_for_patch(self, patch: "PatchState"):
         """
