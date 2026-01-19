@@ -1,12 +1,14 @@
 """
 Tests for corpus_db_viewer module.
 
-Tests for database query functions and export formatters.
+Tests for database query functions, export formatters, and TUI application.
 """
 
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -331,3 +333,645 @@ class TestCLI:
         exit_code = main(["--db", str(nonexistent)])
 
         assert exit_code == 1  # Error exit code
+
+
+# ============================================================================
+# Additional Edge Case Tests
+# ============================================================================
+
+
+@pytest.fixture
+def empty_table_db(tmp_path: Path) -> Path:
+    """
+    Create a database with an empty table.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Pytest temporary directory
+
+    Returns
+    -------
+    Path
+        Path to test database
+    """
+    db_path = tmp_path / "empty.db"
+    conn = sqlite3.connect(db_path)
+
+    conn.execute("""
+        CREATE TABLE empty_table (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            value INTEGER
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+    return db_path
+
+
+@pytest.fixture
+def null_values_db(tmp_path: Path) -> Path:
+    """
+    Create a database with NULL values.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Pytest temporary directory
+
+    Returns
+    -------
+    Path
+        Path to test database
+    """
+    db_path = tmp_path / "nulls.db"
+    conn = sqlite3.connect(db_path)
+
+    conn.execute("""
+        CREATE TABLE items (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            description TEXT,
+            count INTEGER
+        )
+    """)
+
+    # Insert rows with NULL values
+    conn.executemany(
+        "INSERT INTO items VALUES (?, ?, ?, ?)",
+        [
+            (1, "Item A", "Has description", 10),
+            (2, "Item B", None, 20),  # NULL description
+            (3, None, "No name", None),  # NULL name and count
+            (4, "Item D", None, None),  # Multiple NULLs
+        ],
+    )
+
+    conn.commit()
+    conn.close()
+
+    return db_path
+
+
+@pytest.fixture
+def unicode_db(tmp_path: Path) -> Path:
+    """
+    Create a database with unicode data.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Pytest temporary directory
+
+    Returns
+    -------
+    Path
+        Path to test database
+    """
+    db_path = tmp_path / "unicode.db"
+    conn = sqlite3.connect(db_path)
+
+    conn.execute("""
+        CREATE TABLE languages (
+            id INTEGER PRIMARY KEY,
+            language TEXT,
+            greeting TEXT,
+            script TEXT
+        )
+    """)
+
+    # Insert unicode data
+    conn.executemany(
+        "INSERT INTO languages VALUES (?, ?, ?, ?)",
+        [
+            (1, "English", "Hello", "Latin"),
+            (2, "Japanese", "こんにちは", "Hiragana"),
+            (3, "Chinese", "你好", "Han"),
+            (4, "Arabic", "مرحبا", "Arabic"),
+            (5, "Russian", "Привет", "Cyrillic"),
+            (6, "Greek", "Γειά σου", "Greek"),
+            (7, "Emoji", "👋🌍", "Emoji"),
+        ],
+    )
+
+    conn.commit()
+    conn.close()
+
+    return db_path
+
+
+class TestQueriesEdgeCases:
+    """Edge case tests for queries module."""
+
+    def test_get_table_data_empty_table(self, empty_table_db: Path):
+        """Test getting data from an empty table."""
+        data = queries.get_table_data(empty_table_db, "empty_table", page=1, limit=10)
+
+        assert data["total"] == 0
+        assert data["page"] == 1
+        assert data["limit"] == 10
+        assert data["total_pages"] == 1  # At least 1 page even when empty
+        assert len(data["rows"]) == 0
+
+    def test_get_table_data_with_null_values(self, null_values_db: Path):
+        """Test that NULL values are properly returned."""
+        data = queries.get_table_data(null_values_db, "items", page=1, limit=10)
+
+        assert data["total"] == 4
+        assert len(data["rows"]) == 4
+
+        # Check NULL values are preserved
+        row_2 = next(r for r in data["rows"] if r["id"] == 2)
+        assert row_2["description"] is None
+
+        row_3 = next(r for r in data["rows"] if r["id"] == 3)
+        assert row_3["name"] is None
+        assert row_3["count"] is None
+
+    def test_get_table_data_invalid_sort_order(self, test_db: Path):
+        """Test that invalid sort_order defaults to ASC."""
+        # Invalid sort order should default to ASC
+        data = queries.get_table_data(
+            test_db,
+            "test_runs",
+            page=1,
+            limit=10,
+            sort_by="count",
+            sort_order="INVALID",
+        )
+
+        counts = [row["count"] for row in data["rows"]]
+        assert counts == [50, 100, 150, 175, 200]  # ASC order
+
+    def test_get_table_data_sort_order_case_insensitive(self, test_db: Path):
+        """Test that sort_order is case-insensitive."""
+        # Lowercase should work
+        data_lower = queries.get_table_data(
+            test_db, "test_runs", page=1, limit=10, sort_by="count", sort_order="desc"
+        )
+        counts_lower = [row["count"] for row in data_lower["rows"]]
+        assert counts_lower == [200, 175, 150, 100, 50]  # DESC order
+
+    def test_get_table_data_page_beyond_total(self, test_db: Path):
+        """Test requesting a page beyond total pages returns empty rows."""
+        data = queries.get_table_data(test_db, "test_runs", page=100, limit=2)
+
+        assert data["total"] == 5
+        assert data["page"] == 100
+        assert data["total_pages"] == 3
+        assert len(data["rows"]) == 0  # No rows on page 100
+
+    def test_get_table_data_with_unicode(self, unicode_db: Path):
+        """Test that unicode data is properly handled."""
+        data = queries.get_table_data(unicode_db, "languages", page=1, limit=10)
+
+        assert data["total"] == 7
+        assert len(data["rows"]) == 7
+
+        # Verify unicode data is intact
+        japanese = next(r for r in data["rows"] if r["language"] == "Japanese")
+        assert japanese["greeting"] == "こんにちは"
+
+        chinese = next(r for r in data["rows"] if r["language"] == "Chinese")
+        assert chinese["greeting"] == "你好"
+
+        emoji = next(r for r in data["rows"] if r["language"] == "Emoji")
+        assert emoji["greeting"] == "👋🌍"
+
+    def test_get_row_count_empty_table(self, empty_table_db: Path):
+        """Test row count for empty table."""
+        count = queries.get_row_count(empty_table_db, "empty_table")
+        assert count == 0
+
+    def test_get_table_schema_no_indexes(self, empty_table_db: Path):
+        """Test schema for table with no indexes."""
+        schema = queries.get_table_schema(empty_table_db, "empty_table")
+
+        assert len(schema["columns"]) == 3
+        assert schema["indexes"] == []
+        assert "CREATE TABLE" in schema["create_sql"]
+
+
+class TestFormattersEdgeCases:
+    """Edge case tests for formatters module."""
+
+    def test_export_to_csv_with_special_characters(self, tmp_path: Path):
+        """Test CSV export with commas, quotes, and newlines."""
+        rows = [
+            {"id": 1, "name": "O'Brien", "note": "Has apostrophe"},
+            {"id": 2, "name": "Smith, Jr.", "note": "Has comma"},
+            {"id": 3, "name": '"Quoted"', "note": "Has quotes"},
+        ]
+        output = tmp_path / "special.csv"
+
+        formatters.export_to_csv(rows, output)
+
+        assert output.exists()
+        content = output.read_text()
+
+        # CSV should properly escape special characters
+        assert "O'Brien" in content
+        # Comma in value should be quoted (CSV wraps in quotes)
+        assert '"Smith, Jr."' in content
+        # Quotes should be escaped (doubled)
+        assert '"""Quoted"""' in content
+        lines = content.strip().split("\n")
+        assert len(lines) == 4  # Header + 3 data rows
+
+    def test_export_to_csv_with_unicode(self, tmp_path: Path):
+        """Test CSV export with unicode characters."""
+        rows = [
+            {"id": 1, "greeting": "こんにちは", "lang": "Japanese"},
+            {"id": 2, "greeting": "你好", "lang": "Chinese"},
+            {"id": 3, "greeting": "👋🌍", "lang": "Emoji"},
+        ]
+        output = tmp_path / "unicode.csv"
+
+        formatters.export_to_csv(rows, output)
+
+        assert output.exists()
+        content = output.read_text(encoding="utf-8")
+
+        assert "こんにちは" in content
+        assert "你好" in content
+        assert "👋🌍" in content
+
+    def test_export_to_csv_creates_parent_directories(self, tmp_path: Path):
+        """Test that CSV export creates nested parent directories."""
+        rows = [{"id": 1, "name": "Test"}]
+        output = tmp_path / "deep" / "nested" / "path" / "data.csv"
+
+        formatters.export_to_csv(rows, output)
+
+        assert output.exists()
+        assert output.parent.exists()
+
+    def test_export_to_json_with_datetime(self, tmp_path: Path):
+        """Test JSON export handles datetime objects via default=str."""
+        now = datetime.now()
+        rows = [
+            {"id": 1, "name": "Event A", "timestamp": now},
+            {"id": 2, "name": "Event B", "timestamp": now},
+        ]
+        output = tmp_path / "datetime.json"
+
+        formatters.export_to_json(rows, output)
+
+        assert output.exists()
+
+        with output.open() as f:
+            data = json.load(f)
+
+        assert len(data) == 2
+        # datetime should be serialized as string
+        assert str(now) in data[0]["timestamp"]
+
+    def test_export_to_json_with_unicode(self, tmp_path: Path):
+        """Test JSON export preserves unicode without escaping."""
+        rows = [
+            {"id": 1, "text": "こんにちは"},
+            {"id": 2, "text": "emoji: 👋🌍"},
+        ]
+        output = tmp_path / "unicode.json"
+
+        formatters.export_to_json(rows, output)
+
+        content = output.read_text(encoding="utf-8")
+
+        # ensure_ascii=False should preserve unicode
+        assert "こんにちは" in content
+        assert "👋🌍" in content
+
+    def test_export_to_json_creates_parent_directories(self, tmp_path: Path):
+        """Test that JSON export creates nested parent directories."""
+        rows = [{"id": 1, "name": "Test"}]
+        output = tmp_path / "deep" / "nested" / "path" / "data.json"
+
+        formatters.export_to_json(rows, output)
+
+        assert output.exists()
+        assert output.parent.exists()
+
+    def test_format_file_size_large_values(self):
+        """Test file size formatting for GB and TB scale."""
+        # GB scale
+        assert formatters.format_file_size(1024 * 1024 * 1024) == "1.0 GB"
+        assert formatters.format_file_size(int(1024 * 1024 * 1024 * 2.5)) == "2.5 GB"
+
+        # TB scale
+        assert formatters.format_file_size(1024 * 1024 * 1024 * 1024) == "1.0 TB"
+        assert formatters.format_file_size(1024 * 1024 * 1024 * 1024 * 5) == "5.0 TB"
+
+    def test_format_row_count_large_values(self):
+        """Test row count formatting for very large values."""
+        assert formatters.format_row_count(1_000_000_000) == "1,000,000,000 rows"
+        assert formatters.format_row_count(999_999_999) == "999,999,999 rows"
+
+
+class TestCLIEdgeCases:
+    """Edge case tests for CLI module."""
+
+    def test_main_creates_export_directory(self, test_db: Path, tmp_path: Path):
+        """Test that main creates export directory if it doesn't exist."""
+        from build_tools.corpus_db_viewer.cli import main
+
+        export_dir = tmp_path / "new_exports"
+        assert not export_dir.exists()
+
+        # Mock the app.run() to avoid launching TUI
+        with patch("build_tools.corpus_db_viewer.app.CorpusDBViewerApp.run"):
+            exit_code = main(["--db", str(test_db), "--export-dir", str(export_dir)])
+
+        assert exit_code == 0
+        assert export_dir.exists()
+
+    def test_main_handles_keyboard_interrupt(self, test_db: Path, tmp_path: Path):
+        """Test that main handles KeyboardInterrupt gracefully."""
+        from build_tools.corpus_db_viewer.cli import main
+
+        with patch(
+            "build_tools.corpus_db_viewer.app.CorpusDBViewerApp.run",
+            side_effect=KeyboardInterrupt(),
+        ):
+            exit_code = main(["--db", str(test_db)])
+
+        assert exit_code == 1
+
+    def test_main_handles_runtime_error(self, test_db: Path, tmp_path: Path):
+        """Test that main handles runtime errors gracefully."""
+        from build_tools.corpus_db_viewer.cli import main
+
+        with patch(
+            "build_tools.corpus_db_viewer.app.CorpusDBViewerApp.run",
+            side_effect=RuntimeError("Simulated error"),
+        ):
+            exit_code = main(["--db", str(test_db)])
+
+        assert exit_code == 1
+
+    def test_main_with_export_dir_creation_error(self, test_db: Path, tmp_path: Path):
+        """Test main when export directory creation fails."""
+        from build_tools.corpus_db_viewer.cli import main
+
+        # Create a file where we want a directory (will cause mkdir to fail)
+        blocking_file = tmp_path / "blocking"
+        blocking_file.write_text("I'm a file, not a directory")
+
+        exit_code = main(["--db", str(test_db), "--export-dir", str(blocking_file / "subdir")])
+
+        assert exit_code == 1
+
+
+# ============================================================================
+# TUI Application Tests (using Textual's async testing)
+# ============================================================================
+
+
+class TestCorpusDBViewerApp:
+    """Tests for the TUI application using Textual's async pilot."""
+
+    @pytest.fixture
+    def app(self, test_db: Path, tmp_path: Path):
+        """Create a CorpusDBViewerApp instance for testing."""
+        from build_tools.corpus_db_viewer.app import CorpusDBViewerApp
+
+        return CorpusDBViewerApp(
+            db_path=test_db,
+            export_dir=tmp_path / "exports",
+            page_size=2,  # Small page size for testing pagination
+        )
+
+    @pytest.mark.asyncio
+    async def test_app_initialization(self, app):
+        """Test app initializes with correct values."""
+        assert app.page_size == 2
+        assert app.current_table is None
+        assert app.current_page == 1
+        assert app.total_pages == 1
+
+    @pytest.mark.asyncio
+    async def test_app_loads_tables_on_mount(self, app):
+        """Test that app loads tables when mounted."""
+        async with app.run_test():
+            # App should load tables and select first one
+            assert app.tables is not None
+            assert len(app.tables) == 2
+            assert app.current_table == "test_outputs"  # First table alphabetically
+
+    @pytest.mark.asyncio
+    async def test_app_pagination_next_page(self, app):
+        """Test pagination - next page action."""
+        async with app.run_test() as pilot:
+            # Switch to test_runs (5 rows, 2 per page = 3 pages)
+            app.current_table = "test_runs"
+            app.load_table_data()
+
+            assert app.total_pages == 3
+            assert app.current_page == 1
+
+            # Go to next page
+            await pilot.press("right")
+
+            assert app.current_page == 2
+
+    @pytest.mark.asyncio
+    async def test_app_pagination_prev_page(self, app):
+        """Test pagination - previous page action."""
+        async with app.run_test() as pilot:
+            app.current_table = "test_runs"
+            app.current_page = 2
+            app.load_table_data()
+
+            await pilot.press("left")
+
+            assert app.current_page == 1
+
+    @pytest.mark.asyncio
+    async def test_app_pagination_at_boundary(self, app):
+        """Test pagination doesn't go below 1 or above total."""
+        async with app.run_test() as pilot:
+            app.current_table = "test_runs"
+            app.load_table_data()
+
+            # Try to go before first page
+            assert app.current_page == 1
+            await pilot.press("left")
+            assert app.current_page == 1  # Still 1
+
+            # Go to last page
+            app.current_page = app.total_pages
+            app.load_table_data()
+
+            # Try to go past last page
+            await pilot.press("right")
+            assert app.current_page == app.total_pages  # Still at last
+
+    @pytest.mark.asyncio
+    async def test_app_first_page_action(self, app):
+        """Test home key goes to first page."""
+        async with app.run_test() as pilot:
+            app.current_table = "test_runs"
+            app.current_page = 3
+            app.load_table_data()
+
+            await pilot.press("home")
+
+            assert app.current_page == 1
+
+    @pytest.mark.asyncio
+    async def test_app_last_page_action(self, app):
+        """Test end key goes to last page."""
+        async with app.run_test() as pilot:
+            app.current_table = "test_runs"
+            app.load_table_data()
+
+            await pilot.press("end")
+
+            assert app.current_page == app.total_pages
+
+    @pytest.mark.asyncio
+    async def test_app_refresh_action(self, app):
+        """Test refresh reloads data."""
+        async with app.run_test() as pilot:
+            app.current_table = "test_runs"
+            app.load_table_data()
+
+            initial_data = app.current_data.copy()
+
+            await pilot.press("r")
+
+            # Data should still be the same (no changes)
+            assert app.current_data == initial_data
+
+    @pytest.mark.asyncio
+    async def test_app_show_help(self, app):
+        """Test help modal is shown."""
+        from build_tools.corpus_db_viewer.app import HelpModal
+
+        async with app.run_test() as pilot:
+            await pilot.press("question_mark")
+
+            # Check that HelpModal is on the screen stack
+            assert any(isinstance(s, HelpModal) for s in app.screen_stack)
+
+    @pytest.mark.asyncio
+    async def test_app_show_schema(self, app):
+        """Test schema modal is shown."""
+        from build_tools.corpus_db_viewer.app import SchemaModal
+
+        async with app.run_test() as pilot:
+            # Need to wait for table to load
+            app.current_table = "test_runs"
+            app.load_table_data()
+
+            await pilot.press("i")
+
+            # Check that SchemaModal is on the screen stack
+            assert any(isinstance(s, SchemaModal) for s in app.screen_stack)
+
+
+class TestSchemaModal:
+    """Tests for SchemaModal."""
+
+    @pytest.mark.asyncio
+    async def test_schema_modal_displays_columns(self, test_db: Path, tmp_path: Path):
+        """Test that schema modal displays column information."""
+        from build_tools.corpus_db_viewer.app import CorpusDBViewerApp, SchemaModal
+
+        app = CorpusDBViewerApp(
+            db_path=test_db,
+            export_dir=tmp_path / "exports",
+            page_size=50,
+        )
+
+        async with app.run_test():
+            app.current_table = "test_runs"
+            app.load_table_data()
+
+            # Push schema modal
+            schema_data = queries.get_table_schema(test_db, "test_runs")
+            app.push_screen(SchemaModal(schema_data, "test_runs"))
+
+            # Modal should be on screen
+            assert any(isinstance(s, SchemaModal) for s in app.screen_stack)
+
+    @pytest.mark.asyncio
+    async def test_schema_modal_closes_on_button(self, test_db: Path, tmp_path: Path):
+        """Test that schema modal closes when button is pressed."""
+        from build_tools.corpus_db_viewer.app import CorpusDBViewerApp, SchemaModal
+
+        app = CorpusDBViewerApp(
+            db_path=test_db,
+            export_dir=tmp_path / "exports",
+            page_size=50,
+        )
+
+        async with app.run_test() as pilot:
+            schema_data = queries.get_table_schema(test_db, "test_runs")
+            app.push_screen(SchemaModal(schema_data, "test_runs"))
+
+            # Wait for the screen to be mounted and rendered
+            await pilot.pause()
+
+            # Click the close button
+            await pilot.click("#close-schema")
+
+            # Modal should be gone
+            assert not any(isinstance(s, SchemaModal) for s in app.screen_stack)
+
+
+class TestHelpModal:
+    """Tests for HelpModal."""
+
+    @pytest.mark.asyncio
+    async def test_help_modal_closes_on_keypress(self, test_db: Path, tmp_path: Path):
+        """Test that help modal closes on any key press."""
+        from build_tools.corpus_db_viewer.app import CorpusDBViewerApp, HelpModal
+
+        app = CorpusDBViewerApp(
+            db_path=test_db,
+            export_dir=tmp_path / "exports",
+            page_size=50,
+        )
+
+        async with app.run_test() as pilot:
+            app.push_screen(HelpModal())
+
+            assert any(isinstance(s, HelpModal) for s in app.screen_stack)
+
+            # Press any key to close
+            await pilot.press("escape")
+
+            assert not any(isinstance(s, HelpModal) for s in app.screen_stack)
+
+
+class TestExportModal:
+    """Tests for ExportModal."""
+
+    @pytest.mark.asyncio
+    async def test_export_modal_cancel(self, test_db: Path, tmp_path: Path):
+        """Test that export modal can be cancelled."""
+        from build_tools.corpus_db_viewer.app import CorpusDBViewerApp, ExportModal
+
+        app = CorpusDBViewerApp(
+            db_path=test_db,
+            export_dir=tmp_path / "exports",
+            page_size=50,
+        )
+
+        async with app.run_test() as pilot:
+            app.push_screen(ExportModal("test_file"))
+
+            # Wait for the screen to be mounted and rendered
+            await pilot.pause()
+
+            assert any(isinstance(s, ExportModal) for s in app.screen_stack)
+
+            # Click cancel
+            await pilot.click("#export-cancel")
+
+            # Modal should be gone
+            assert not any(isinstance(s, ExportModal) for s in app.screen_stack)
