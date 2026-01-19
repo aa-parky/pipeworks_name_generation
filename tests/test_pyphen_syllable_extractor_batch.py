@@ -741,3 +741,429 @@ class TestIntegration:
         syllables1 = result1.syllables_output_path.read_text(encoding="utf-8")
         syllables2 = result2.syllables_output_path.read_text(encoding="utf-8")
         assert syllables1 == syllables2
+
+
+class TestMainBatchExtended:
+    """Extended tests for main_batch function covering more paths."""
+
+    def test_main_batch_multiple_files_input(self, tmp_path):
+        """Test main_batch with --files argument."""
+        # Create test files
+        file1 = tmp_path / "file1.txt"
+        file1.write_text("Hello beautiful world", encoding="utf-8")
+        file2 = tmp_path / "file2.txt"
+        file2.write_text("Programming technology", encoding="utf-8")
+
+        args = argparse.Namespace(
+            file=None,
+            files=[str(file1), str(file2)],
+            source=None,
+            lang="en_US",
+            auto=False,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=False,
+            quiet=True,
+            verbose=False,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 0
+
+    def test_main_batch_source_directory_input(self, tmp_path):
+        """Test main_batch with --source argument."""
+        # Create test files
+        (tmp_path / "file1.txt").write_text("Hello beautiful world", encoding="utf-8")
+        (tmp_path / "file2.txt").write_text("Programming technology", encoding="utf-8")
+
+        args = argparse.Namespace(
+            file=None,
+            files=None,
+            source=str(tmp_path),
+            lang="en_US",
+            auto=False,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=False,
+            quiet=True,
+            verbose=False,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 0
+
+    def test_main_batch_source_recursive(self, tmp_path):
+        """Test main_batch with recursive directory scanning."""
+        # Create nested structure
+        (tmp_path / "file1.txt").write_text("Hello world", encoding="utf-8")
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "file2.txt").write_text("Nested content", encoding="utf-8")
+
+        args = argparse.Namespace(
+            file=None,
+            files=None,
+            source=str(tmp_path),
+            lang="en_US",
+            auto=False,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=True,
+            quiet=True,
+            verbose=False,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 0
+
+    def test_main_batch_no_input_specified(self, tmp_path, capsys):
+        """Test main_batch with no input specified."""
+        args = argparse.Namespace(
+            file=None,
+            files=None,
+            source=None,
+            lang="en_US",
+            auto=False,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=False,
+            quiet=False,
+            verbose=False,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "No input specified" in captured.out
+
+    def test_main_batch_source_not_found(self, tmp_path, capsys):
+        """Test main_batch with nonexistent source directory."""
+        args = argparse.Namespace(
+            file=None,
+            files=None,
+            source=str(tmp_path / "nonexistent"),
+            lang="en_US",
+            auto=False,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=False,
+            quiet=False,
+            verbose=False,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.out
+
+    def test_main_batch_source_is_file(self, tmp_path, capsys):
+        """Test main_batch when source is a file not directory."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("content", encoding="utf-8")
+
+        args = argparse.Namespace(
+            file=None,
+            files=None,
+            source=str(test_file),
+            lang="en_US",
+            auto=False,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=False,
+            quiet=False,
+            verbose=False,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "not a directory" in captured.out
+
+    def test_main_batch_no_files_match_pattern(self, tmp_path, capsys):
+        """Test main_batch when no files match pattern."""
+        (tmp_path / "file.md").write_text("content", encoding="utf-8")
+
+        args = argparse.Namespace(
+            file=None,
+            files=None,
+            source=str(tmp_path),
+            lang="en_US",
+            auto=False,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=False,
+            quiet=False,
+            verbose=False,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "No files matching" in captured.out
+
+    def test_main_batch_with_auto_detection(self, tmp_path):
+        """Test main_batch with auto language detection."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello beautiful wonderful world", encoding="utf-8")
+
+        args = argparse.Namespace(
+            file=str(test_file),
+            files=None,
+            source=None,
+            lang=None,
+            auto=True,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=False,
+            quiet=True,
+            verbose=False,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 0
+
+    def test_main_batch_verbose_output(self, tmp_path, capsys):
+        """Test main_batch with verbose output."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello beautiful world", encoding="utf-8")
+
+        args = argparse.Namespace(
+            file=str(test_file),
+            files=None,
+            source=None,
+            lang="en_US",
+            auto=False,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=False,
+            quiet=False,
+            verbose=True,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 0
+        captured = capsys.readouterr()
+        assert "BATCH SYLLABLE EXTRACTION" in captured.out
+
+    def test_main_batch_files_not_found(self, tmp_path, capsys):
+        """Test main_batch with nonexistent files in --files."""
+        args = argparse.Namespace(
+            file=None,
+            files=[str(tmp_path / "nonexistent.txt")],
+            source=None,
+            lang="en_US",
+            auto=False,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=False,
+            quiet=False,
+            verbose=False,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.out
+
+    def test_main_batch_file_is_directory(self, tmp_path, capsys):
+        """Test main_batch when --file is actually a directory."""
+        args = argparse.Namespace(
+            file=str(tmp_path),
+            files=None,
+            source=None,
+            lang="en_US",
+            auto=False,
+            min=2,
+            max=8,
+            output=str(tmp_path / "output"),
+            pattern="*.txt",
+            recursive=False,
+            quiet=False,
+            verbose=False,
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main_batch(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "not a file" in captured.out
+
+
+class TestRecordCorpusDbSafe:
+    """Tests for _record_corpus_db_safe function."""
+
+    def test_record_success(self):
+        """Test successful recording."""
+        from build_tools.pyphen_syllable_extractor.cli import _record_corpus_db_safe
+
+        result = _record_corpus_db_safe("test", lambda: "success")
+        assert result == "success"
+
+    def test_record_failure_prints_warning(self, capsys):
+        """Test that failures print warning to stderr."""
+        from build_tools.pyphen_syllable_extractor.cli import _record_corpus_db_safe
+
+        def failing_func():
+            raise RuntimeError("Test error")
+
+        result = _record_corpus_db_safe("test operation", failing_func, quiet=False)
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err
+        assert "test operation" in captured.err
+
+    def test_record_failure_quiet_no_output(self, capsys):
+        """Test that failures are silent when quiet=True."""
+        from build_tools.pyphen_syllable_extractor.cli import _record_corpus_db_safe
+
+        def failing_func():
+            raise RuntimeError("Test error")
+
+        result = _record_corpus_db_safe("test operation", failing_func, quiet=True)
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert captured.err == ""
+
+
+class TestPathCompleter:
+    """Tests for path_completer function."""
+
+    def test_path_completer_directory(self, tmp_path):
+        """Test path completer with directory."""
+        from build_tools.pyphen_syllable_extractor.cli import path_completer
+
+        # Create test files
+        (tmp_path / "file1.txt").write_text("content")
+        (tmp_path / "file2.txt").write_text("content")
+
+        result = path_completer(str(tmp_path), 0)
+        assert result is not None
+
+    def test_path_completer_no_matches(self, tmp_path):
+        """Test path completer with no matches."""
+        from build_tools.pyphen_syllable_extractor.cli import path_completer
+
+        result = path_completer(str(tmp_path / "nonexistent_prefix"), 0)
+        assert result is None
+
+    def test_path_completer_partial_path(self, tmp_path):
+        """Test path completer with partial path."""
+        from build_tools.pyphen_syllable_extractor.cli import path_completer
+
+        (tmp_path / "myfile.txt").write_text("content")
+        result = path_completer(str(tmp_path / "myf"), 0)
+
+        assert result is not None
+        assert "myfile.txt" in result
+
+
+class TestMain:
+    """Tests for main entry point."""
+
+    def test_main_batch_mode(self, tmp_path):
+        """Test main() routes to batch mode when args provided."""
+        from unittest.mock import patch
+
+        from build_tools.pyphen_syllable_extractor.cli import main
+
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello world", encoding="utf-8")
+
+        with patch(
+            "sys.argv",
+            [
+                "cli",
+                "--file",
+                str(test_file),
+                "--lang",
+                "en_US",
+                "--output",
+                str(tmp_path / "output"),
+                "--quiet",
+            ],
+        ):
+            with pytest.raises(SystemExit) as excinfo:
+                main()
+
+            assert excinfo.value.code == 0
+
+
+class TestProcessBatchOutput:
+    """Tests for process_batch output formatting."""
+
+    def test_process_batch_non_quiet_output(self, tmp_path, capsys):
+        """Test batch processing with progress output."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello beautiful world", encoding="utf-8")
+
+        process_batch(
+            files=[test_file],
+            language_code="en_US",
+            min_len=2,
+            max_len=8,
+            output_dir=tmp_path / "output",
+            quiet=False,
+            verbose=False,
+        )
+
+        captured = capsys.readouterr()
+        assert "BATCH PROCESSING" in captured.out
+
+    def test_process_batch_failure_output(self, tmp_path, capsys):
+        """Test batch processing failure output."""
+        process_batch(
+            files=[Path("/nonexistent/file.txt")],
+            language_code="en_US",
+            min_len=2,
+            max_len=8,
+            output_dir=tmp_path / "output",
+            quiet=False,
+            verbose=False,
+        )
+
+        captured = capsys.readouterr()
+        # Should show failure indicator
+        assert "✗" in captured.out or "0 (" in captured.out

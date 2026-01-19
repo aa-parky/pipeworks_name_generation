@@ -875,3 +875,561 @@ class TestArgumentParser:
         assert args.recursive is False
         assert args.quiet is False
         assert args.verbose is False
+
+    def test_parse_files_argument(self):
+        """Test parsing --files argument with multiple files."""
+        parser = create_argument_parser()
+        args = parser.parse_args(["--files", "file1.txt", "file2.txt", "file3.txt"])
+
+        assert len(args.files) == 3
+        assert args.files[0] == Path("file1.txt")
+        assert args.files[2] == Path("file3.txt")
+
+    def test_parse_pattern_argument(self):
+        """Test parsing --pattern argument."""
+        parser = create_argument_parser()
+        args = parser.parse_args(["--source", "data/", "--pattern", "*.md"])
+
+        assert args.pattern == "*.md"
+
+
+class TestMainBatch:
+    """Tests for main_batch function."""
+
+    @pytest.fixture
+    def sample_text_file(self, tmp_path: Path) -> Path:
+        """Create a sample text file for testing."""
+        file_path = tmp_path / "sample.txt"
+        file_path.write_text("Hello wonderful world of programming")
+        return file_path
+
+    @pytest.fixture
+    def sample_text_files(self, tmp_path: Path) -> list[Path]:
+        """Create multiple sample text files for testing."""
+        files = []
+        for i, text in enumerate(["Hello world", "Testing batch", "More text here"]):
+            file_path = tmp_path / f"file{i}.txt"
+            file_path.write_text(text)
+            files.append(file_path)
+        return files
+
+    def test_main_batch_single_file(self, sample_text_file: Path, tmp_path: Path):
+        """Test batch mode with single file."""
+        try:
+            import cmudict  # noqa: F401
+        except ImportError:
+            pytest.skip("cmudict not installed")
+
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--file",
+                str(sample_text_file),
+                "--output",
+                str(tmp_path / "output"),
+                "--quiet",
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 0
+
+    def test_main_batch_multiple_files(self, sample_text_files: list[Path], tmp_path: Path):
+        """Test batch mode with multiple files."""
+        try:
+            import cmudict  # noqa: F401
+        except ImportError:
+            pytest.skip("cmudict not installed")
+
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--files",
+                *[str(f) for f in sample_text_files],
+                "--output",
+                str(tmp_path / "output"),
+                "--quiet",
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 0
+
+    def test_main_batch_source_directory(self, sample_text_files: list[Path], tmp_path: Path):
+        """Test batch mode with source directory."""
+        try:
+            import cmudict  # noqa: F401
+        except ImportError:
+            pytest.skip("cmudict not installed")
+
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        # Files are already in tmp_path
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--source",
+                str(tmp_path),
+                "--pattern",
+                "*.txt",
+                "--output",
+                str(tmp_path / "output"),
+                "--quiet",
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 0
+
+    def test_main_batch_source_recursive(self, tmp_path: Path):
+        """Test batch mode with recursive directory scanning."""
+        try:
+            import cmudict  # noqa: F401
+        except ImportError:
+            pytest.skip("cmudict not installed")
+
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        # Create nested structure
+        (tmp_path / "file1.txt").write_text("Hello world")
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "file2.txt").write_text("Nested file content")
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--source",
+                str(tmp_path),
+                "--pattern",
+                "*.txt",
+                "--recursive",
+                "--output",
+                str(tmp_path / "output"),
+                "--quiet",
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 0
+
+    def test_main_batch_invalid_min_length(self, sample_text_file: Path, tmp_path: Path, capsys):
+        """Test batch mode with invalid min length."""
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--file",
+                str(sample_text_file),
+                "--min",
+                "0",
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "Minimum syllable length must be at least 1" in captured.out
+
+    def test_main_batch_invalid_max_less_than_min(
+        self, sample_text_file: Path, tmp_path: Path, capsys
+    ):
+        """Test batch mode with max < min."""
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--file",
+                str(sample_text_file),
+                "--min",
+                "5",
+                "--max",
+                "3",
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "must be >= minimum" in captured.out
+
+    def test_main_batch_file_not_found(self, tmp_path: Path, capsys):
+        """Test batch mode with nonexistent file."""
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--file",
+                str(tmp_path / "nonexistent.txt"),
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "File not found" in captured.out
+
+    def test_main_batch_file_is_directory(self, tmp_path: Path, capsys):
+        """Test batch mode when file argument is actually a directory."""
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--file",
+                str(tmp_path),  # tmp_path is a directory
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "not a file" in captured.out
+
+    def test_main_batch_source_not_found(self, tmp_path: Path, capsys):
+        """Test batch mode with nonexistent source directory."""
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--source",
+                str(tmp_path / "nonexistent"),
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.out
+
+    def test_main_batch_source_is_file(self, sample_text_file: Path, tmp_path: Path, capsys):
+        """Test batch mode when source is a file not directory."""
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--source",
+                str(sample_text_file),  # File, not directory
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "not a directory" in captured.out
+
+    def test_main_batch_no_files_matching_pattern(self, tmp_path: Path, capsys):
+        """Test batch mode when no files match pattern."""
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        # Create files with different extension
+        (tmp_path / "file.md").write_text("markdown content")
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--source",
+                str(tmp_path),
+                "--pattern",
+                "*.txt",
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "No files matching pattern" in captured.out
+
+    def test_main_batch_no_input_specified(self, tmp_path: Path, capsys):
+        """Test batch mode with no input specified."""
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "No input specified" in captured.out
+
+    def test_main_batch_verbose_output(self, sample_text_file: Path, tmp_path: Path, capsys):
+        """Test batch mode with verbose output."""
+        try:
+            import cmudict  # noqa: F401
+        except ImportError:
+            pytest.skip("cmudict not installed")
+
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--file",
+                str(sample_text_file),
+                "--output",
+                str(tmp_path / "output"),
+                "--verbose",
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "BATCH NLTK SYLLABLE EXTRACTION" in captured.out
+
+    def test_main_batch_with_failures_exits_code_1(self, tmp_path: Path):
+        """Test batch mode exits with code 1 when some files fail."""
+        try:
+            import cmudict  # noqa: F401
+        except ImportError:
+            pytest.skip("cmudict not installed")
+
+        from build_tools.nltk_syllable_extractor.cli import main_batch
+
+        # Create one valid file
+        (tmp_path / "valid.txt").write_text("Hello world")
+
+        parser = create_argument_parser()
+        args = parser.parse_args(
+            [
+                "--files",
+                str(tmp_path / "valid.txt"),
+                str(tmp_path / "nonexistent.txt"),
+                "--output",
+                str(tmp_path / "output"),
+                "--quiet",
+            ]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_batch(args)
+
+        assert exc_info.value.code == 1
+
+
+class TestMain:
+    """Tests for main entry point."""
+
+    def test_main_batch_mode(self, tmp_path: Path):
+        """Test main() routes to batch mode when args provided."""
+        try:
+            import cmudict  # noqa: F401
+        except ImportError:
+            pytest.skip("cmudict not installed")
+
+        from unittest.mock import patch
+
+        from build_tools.nltk_syllable_extractor.cli import main
+
+        # Create a test file
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello world")
+
+        with patch(
+            "sys.argv",
+            ["cli", "--file", str(test_file), "--output", str(tmp_path / "output"), "--quiet"],
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+            assert exc_info.value.code == 0
+
+
+class TestProcessBatchOutput:
+    """Tests for process_batch output formatting."""
+
+    @pytest.fixture
+    def sample_files(self, tmp_path: Path) -> list[Path]:
+        """Create sample text files for batch testing."""
+        files = []
+        for i, text in enumerate(["Hello world", "Testing batch"]):
+            file_path = tmp_path / f"file{i}.txt"
+            file_path.write_text(text)
+            files.append(file_path)
+        return files
+
+    def test_process_batch_non_quiet_output(self, sample_files: list[Path], tmp_path: Path, capsys):
+        """Test batch processing with progress output."""
+        try:
+            import cmudict  # noqa: F401
+        except ImportError:
+            pytest.skip("cmudict not installed")
+
+        result = process_batch(
+            files=sample_files,
+            min_len=2,
+            max_len=8,
+            output_dir=tmp_path / "output",
+            quiet=False,
+            verbose=False,
+        )
+
+        captured = capsys.readouterr()
+        assert "BATCH PROCESSING" in captured.out
+        assert result.successful == 2
+
+    def test_process_batch_verbose_output(self, sample_files: list[Path], tmp_path: Path, capsys):
+        """Test batch processing with verbose output."""
+        try:
+            import cmudict  # noqa: F401
+        except ImportError:
+            pytest.skip("cmudict not installed")
+
+        result = process_batch(
+            files=sample_files,
+            min_len=2,
+            max_len=8,
+            output_dir=tmp_path / "output",
+            quiet=False,
+            verbose=True,
+        )
+
+        captured = capsys.readouterr()
+        assert "Processing" in captured.out
+        assert result.successful == 2
+
+
+class TestRecordCorpusDbSafe:
+    """Tests for _record_corpus_db_safe function."""
+
+    def test_record_success(self):
+        """Test successful recording."""
+        from build_tools.nltk_syllable_extractor.cli import _record_corpus_db_safe
+
+        result = _record_corpus_db_safe("test", lambda: "success")
+        assert result == "success"
+
+    def test_record_failure_prints_warning(self, capsys):
+        """Test that failures print warning to stderr."""
+        from build_tools.nltk_syllable_extractor.cli import _record_corpus_db_safe
+
+        def failing_func():
+            raise RuntimeError("Test error")
+
+        result = _record_corpus_db_safe("test operation", failing_func, quiet=False)
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err
+        assert "test operation" in captured.err
+
+    def test_record_failure_quiet_no_output(self, capsys):
+        """Test that failures are silent when quiet=True."""
+        from build_tools.nltk_syllable_extractor.cli import _record_corpus_db_safe
+
+        def failing_func():
+            raise RuntimeError("Test error")
+
+        result = _record_corpus_db_safe("test operation", failing_func, quiet=True)
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert captured.err == ""
+
+
+class TestPathCompleter:
+    """Tests for path_completer function."""
+
+    def test_path_completer_directory(self, tmp_path: Path):
+        """Test path completer with directory."""
+        from build_tools.nltk_syllable_extractor.cli import path_completer
+
+        # Create test files
+        (tmp_path / "file1.txt").write_text("content")
+        (tmp_path / "file2.txt").write_text("content")
+
+        # Get first completion
+        result = path_completer(str(tmp_path), 0)
+
+        # Should return a path
+        assert result is not None
+
+    def test_path_completer_no_matches(self, tmp_path: Path):
+        """Test path completer with no matches."""
+        from build_tools.nltk_syllable_extractor.cli import path_completer
+
+        result = path_completer(str(tmp_path / "nonexistent_prefix"), 0)
+
+        # Should return None when no matches
+        assert result is None
+
+    def test_path_completer_partial_path(self, tmp_path: Path):
+        """Test path completer with partial path."""
+        from build_tools.nltk_syllable_extractor.cli import path_completer
+
+        # Create test file
+        (tmp_path / "myfile.txt").write_text("content")
+
+        # Try partial match
+        result = path_completer(str(tmp_path / "myf"), 0)
+
+        # Should match the file
+        assert result is not None
+        assert "myfile.txt" in result
+
+
+class TestInputWithCompletion:
+    """Tests for input_with_completion function."""
+
+    def test_input_with_completion(self, monkeypatch):
+        """Test input_with_completion calls input."""
+        from build_tools.nltk_syllable_extractor.cli import input_with_completion
+
+        monkeypatch.setattr("builtins.input", lambda prompt: "/test/path")
+
+        result = input_with_completion("Enter path: ")
+        assert result == "/test/path"
