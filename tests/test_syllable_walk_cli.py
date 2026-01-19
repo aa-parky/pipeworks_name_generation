@@ -378,10 +378,12 @@ class TestErrorHandling:
 
     def test_keyboard_interrupt_handled(self, sample_data_file):
         """Test keyboard interrupt returns correct exit code."""
-        # This is tricky to test directly, but we can verify the handler exists
-        # in the main() function by checking the code structure
-        # The actual KeyboardInterrupt handling is covered by manual testing
-        pass
+        # Mock walker initialization to raise KeyboardInterrupt
+        with patch("build_tools.syllable_walk.cli.SyllableWalker") as mock_walker:
+            mock_walker.side_effect = KeyboardInterrupt()
+            with patch("sys.argv", ["cli", str(sample_data_file)]):
+                exit_code = main()
+                assert exit_code == 130
 
     def test_exception_handled(self, sample_data_file):
         """Test general exceptions are caught and reported."""
@@ -391,6 +393,158 @@ class TestErrorHandling:
             with patch("sys.argv", ["cli", str(sample_data_file)]):
                 exit_code = main()
                 assert exit_code == 1
+
+    def test_exception_with_verbose_shows_traceback(self, sample_data_file, capsys):
+        """Test exceptions show traceback in verbose mode."""
+        with patch("build_tools.syllable_walk.cli.SyllableWalker") as mock_walker:
+            mock_walker.side_effect = RuntimeError("Test error for traceback")
+            with patch("sys.argv", ["cli", str(sample_data_file), "--verbose"]):
+                exit_code = main()
+                assert exit_code == 1
+
+                captured = capsys.readouterr()
+                assert "Test error for traceback" in captured.err
+                assert "Traceback" in captured.err
+
+    def test_missing_data_file_returns_error(self, capsys):
+        """Test that missing data_file argument returns error code."""
+        with patch("sys.argv", ["cli"]):
+            exit_code = main()
+            assert exit_code == 1
+
+            captured = capsys.readouterr()
+            assert "data_file is required" in captured.err
+
+
+class TestWebMode:
+    """Test web server mode."""
+
+    def test_web_mode_returns_exit_code(self, sample_data_file):
+        """Test web mode returns correct exit code on success."""
+        with patch("build_tools.syllable_walk.cli.run_server") as mock_run:
+            with patch("sys.argv", ["cli", str(sample_data_file), "--web"]):
+                exit_code = main()
+                assert exit_code == 0
+                mock_run.assert_called_once()
+
+    def test_web_mode_file_not_found(self, capsys):
+        """Test web mode handles FileNotFoundError."""
+        with patch("build_tools.syllable_walk.cli.run_server") as mock_run:
+            mock_run.side_effect = FileNotFoundError("No dataset found")
+            with patch("sys.argv", ["cli", "--web"]):
+                exit_code = main()
+                assert exit_code == 1
+
+                captured = capsys.readouterr()
+                assert "Error" in captured.err
+
+    def test_web_mode_port_in_use(self, sample_data_file, capsys):
+        """Test web mode handles port in use error."""
+        with patch("build_tools.syllable_walk.cli.run_server") as mock_run:
+            mock_run.side_effect = OSError("Address already in use")
+            with patch("sys.argv", ["cli", str(sample_data_file), "--web", "--port", "5000"]):
+                exit_code = main()
+                assert exit_code == 1
+
+                captured = capsys.readouterr()
+                assert "Error starting server" in captured.err
+                assert "5000" in captured.err
+
+    def test_web_mode_general_error(self, sample_data_file, capsys):
+        """Test web mode handles general exceptions."""
+        with patch("build_tools.syllable_walk.cli.run_server") as mock_run:
+            mock_run.side_effect = RuntimeError("Server crashed")
+            with patch("sys.argv", ["cli", str(sample_data_file), "--web"]):
+                exit_code = main()
+                assert exit_code == 1
+
+                captured = capsys.readouterr()
+                assert "Error" in captured.err
+
+    def test_web_mode_auto_discover(self):
+        """Test web mode without data_file auto-discovers."""
+        with patch("build_tools.syllable_walk.cli.run_server") as mock_run:
+            with patch("sys.argv", ["cli", "--web"]):
+                main()
+                mock_run.assert_called_once()
+                # data_path should be None for auto-discovery
+                assert mock_run.call_args[1]["data_path"] is None
+
+
+class TestBatchModeExtended:
+    """Extended tests for batch mode coverage."""
+
+    def test_batch_with_output_prints_saved_message(self, sample_data_file, tmp_path, capsys):
+        """Test batch with output file prints saved message."""
+        output_file = tmp_path / "batch_output.json"
+        with patch(
+            "sys.argv",
+            [
+                "cli",
+                str(sample_data_file),
+                "--batch",
+                "3",
+                "--output",
+                str(output_file),
+            ],
+        ):
+            exit_code = main()
+            assert exit_code == 0
+
+            captured = capsys.readouterr()
+            assert "Saved" in captured.out or "saved" in captured.out.lower()
+
+    def test_batch_without_output_shows_summary(self, sample_data_file, capsys):
+        """Test batch without output shows summary."""
+        with patch("sys.argv", ["cli", str(sample_data_file), "--batch", "3"]):
+            exit_code = main()
+            assert exit_code == 0
+
+            captured = capsys.readouterr()
+            assert "Total walks" in captured.out or "Summary" in captured.out
+
+
+class TestSearchModeExtended:
+    """Extended tests for search mode coverage."""
+
+    def test_search_many_matches_truncates(self, tmp_path, capsys):
+        """Test search with many matches shows truncation message."""
+        # Create data with many matching syllables
+        syllables = []
+        for i in range(30):
+            syllables.append(
+                {
+                    "syllable": f"ka{i}",
+                    "frequency": 100 - i,
+                    "features": {
+                        "starts_with_vowel": False,
+                        "starts_with_cluster": False,
+                        "starts_with_heavy_cluster": False,
+                        "contains_plosive": True,
+                        "contains_fricative": False,
+                        "contains_liquid": False,
+                        "contains_nasal": False,
+                        "short_vowel": True,
+                        "long_vowel": False,
+                        "ends_with_vowel": True,
+                        "ends_with_nasal": False,
+                        "ends_with_stop": False,
+                    },
+                }
+            )
+
+        data_file = tmp_path / "many_syllables.json"
+        with open(data_file, "w", encoding="utf-8") as f:
+            json.dump(syllables, f)
+
+        with patch("sys.argv", ["cli", str(data_file), "--search", "ka"]):
+            exit_code = main()
+            assert exit_code == 0
+
+            captured = capsys.readouterr()
+            assert "Found" in captured.out
+            # Should show truncation message (more than 20 matches)
+            assert "more" in captured.out or "Narrow" in captured.out
 
 
 # ============================================================
