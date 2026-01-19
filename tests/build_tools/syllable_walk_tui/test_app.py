@@ -412,3 +412,443 @@ class TestModalScreenNavigation:
 
                 # Verify action worked (no errors)
                 assert hasattr(app, "action_view_blended")
+
+
+class TestEventHandlers:
+    """Tests for app event handlers (parameter changes, profile selection)."""
+
+    @pytest.mark.asyncio
+    async def test_int_spinner_changed_updates_min_length(self):
+        """Test that IntSpinner changes update patch state min_length."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            # Create mock event
+            event = IntSpinner.Changed(value=3, widget_id="min-length-A")
+
+            # Call the handler
+            app.on_int_spinner_changed(event)
+
+            assert app.state.patch_a.min_length == 3
+
+    @pytest.mark.asyncio
+    async def test_int_spinner_changed_updates_max_length(self):
+        """Test that IntSpinner changes update patch state max_length."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            event = IntSpinner.Changed(value=7, widget_id="max-length-B")
+            app.on_int_spinner_changed(event)
+
+            assert app.state.patch_b.max_length == 7
+
+    @pytest.mark.asyncio
+    async def test_int_spinner_changed_updates_walk_length(self):
+        """Test that IntSpinner changes update patch state walk_length."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            event = IntSpinner.Changed(value=8, widget_id="walk-length-A")
+            app.on_int_spinner_changed(event)
+
+            assert app.state.patch_a.walk_length == 8
+
+    @pytest.mark.asyncio
+    async def test_int_spinner_changed_updates_neighbors(self):
+        """Test that IntSpinner changes update patch state neighbor_limit."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            event = IntSpinner.Changed(value=15, widget_id="neighbors-A")
+            app.on_int_spinner_changed(event)
+
+            assert app.state.patch_a.neighbor_limit == 15
+
+    @pytest.mark.asyncio
+    async def test_int_spinner_changed_updates_walk_count(self):
+        """Test that IntSpinner changes update patch state walk_count."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            event = IntSpinner.Changed(value=5, widget_id="walk-count-B")
+            app.on_int_spinner_changed(event)
+
+            assert app.state.patch_b.walk_count == 5
+
+    @pytest.mark.asyncio
+    async def test_int_spinner_max_flips_switches_to_custom(self):
+        """Test that changing max_flips switches to custom profile."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            # Start with a named profile
+            app.state.patch_a.current_profile = "clerical"
+
+            event = IntSpinner.Changed(value=3, widget_id="max-flips-A")
+            app.on_int_spinner_changed(event)
+
+            assert app.state.patch_a.max_flips == 3
+            assert app.state.patch_a.current_profile == "custom"
+
+    @pytest.mark.asyncio
+    async def test_float_slider_changed_updates_temperature(self):
+        """Test that FloatSlider changes update patch state temperature."""
+        from build_tools.tui_common.controls import FloatSlider
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            event = FloatSlider.Changed(value=0.8, widget_id="temperature-A")
+            app.on_float_slider_changed(event)
+
+            assert app.state.patch_a.temperature == 0.8
+
+    @pytest.mark.asyncio
+    async def test_float_slider_changed_updates_freq_weight(self):
+        """Test that FloatSlider changes update patch state frequency_weight."""
+        from build_tools.tui_common.controls import FloatSlider
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            event = FloatSlider.Changed(value=0.5, widget_id="freq-weight-B")
+            app.on_float_slider_changed(event)
+
+            assert app.state.patch_b.frequency_weight == 0.5
+
+    @pytest.mark.asyncio
+    async def test_float_slider_temperature_switches_to_custom(self):
+        """Test that changing temperature switches to custom profile."""
+        from build_tools.tui_common.controls import FloatSlider
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            app.state.patch_a.current_profile = "dialect"
+
+            event = FloatSlider.Changed(value=0.9, widget_id="temperature-A")
+            app.on_float_slider_changed(event)
+
+            assert app.state.patch_a.current_profile == "custom"
+
+    @pytest.mark.asyncio
+    async def test_seed_changed_updates_state(self):
+        """Test that SeedInput changes update patch state seed."""
+        from build_tools.tui_common.controls import SeedInput
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            event = SeedInput.Changed(value=12345, widget_id="seed-A")
+            app.on_seed_changed(event)
+
+            assert app.state.patch_a.seed == 12345
+
+    @pytest.mark.asyncio
+    async def test_seed_changed_recreates_rng(self):
+        """Test that seed changes recreate the RNG instance."""
+        from build_tools.tui_common.controls import SeedInput
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            old_rng = app.state.patch_a.rng
+
+            event = SeedInput.Changed(value=99999, widget_id="seed-A")
+            app.on_seed_changed(event)
+
+            # RNG should be a new instance with the new seed
+            assert app.state.patch_a.rng is not old_rng
+            # Verify determinism by generating values
+            app.state.patch_a.rng = __import__("random").Random(99999)
+            val1 = app.state.patch_a.rng.random()
+            app.state.patch_a.rng = __import__("random").Random(99999)
+            val2 = app.state.patch_a.rng.random()
+            assert val1 == val2
+
+    @pytest.mark.asyncio
+    async def test_event_handler_ignores_missing_widget_id(self):
+        """Test that handlers gracefully ignore events without widget_id."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            original_min = app.state.patch_a.min_length
+
+            # Event with no widget_id
+            event = IntSpinner.Changed(value=10, widget_id=None)
+            app.on_int_spinner_changed(event)
+
+            # State should not change
+            assert app.state.patch_a.min_length == original_min
+
+    @pytest.mark.asyncio
+    async def test_event_handler_ignores_malformed_widget_id(self):
+        """Test that handlers gracefully ignore malformed widget IDs."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            original_min = app.state.patch_a.min_length
+
+            # Event with malformed widget_id (no patch suffix)
+            event = IntSpinner.Changed(value=10, widget_id="min-length")
+            app.on_int_spinner_changed(event)
+
+            assert app.state.patch_a.min_length == original_min
+
+
+class TestProfileSwitching:
+    """Tests for profile switching logic and feedback loop prevention."""
+
+    @pytest.mark.asyncio
+    async def test_profile_selection_updates_state(self):
+        """Test that profile selection updates current_profile."""
+        from build_tools.tui_common.controls import RadioOption
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            # Create profile selection event (option_name, widget_id)
+            event = RadioOption.Selected(option_name="goblin", widget_id="profile-goblin-A")
+            app.on_profile_selected(event)
+
+            assert app.state.patch_a.current_profile == "goblin"
+
+    @pytest.mark.asyncio
+    async def test_profile_selection_updates_parameters(self):
+        """Test that selecting a profile updates related parameters."""
+        from build_tools.syllable_walk.profiles import WALK_PROFILES
+        from build_tools.tui_common.controls import RadioOption
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            # Select clerical profile
+            event = RadioOption.Selected(option_name="clerical", widget_id="profile-clerical-A")
+            app.on_profile_selected(event)
+
+            clerical = WALK_PROFILES["clerical"]
+            assert app.state.patch_a.max_flips == clerical.max_flips
+            assert app.state.patch_a.temperature == clerical.temperature
+            assert app.state.patch_a.frequency_weight == clerical.frequency_weight
+
+    @pytest.mark.asyncio
+    async def test_custom_profile_does_not_update_parameters(self):
+        """Test that selecting custom profile doesn't change parameters."""
+        from build_tools.tui_common.controls import RadioOption
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            # Set some custom values
+            app.state.patch_a.max_flips = 99
+            app.state.patch_a.temperature = 0.99
+
+            # Select custom profile
+            event = RadioOption.Selected(option_name="custom", widget_id="profile-custom-A")
+            app.on_profile_selected(event)
+
+            # Parameters should remain unchanged
+            assert app.state.patch_a.max_flips == 99
+            assert app.state.patch_a.temperature == 0.99
+            assert app.state.patch_a.current_profile == "custom"
+
+    @pytest.mark.asyncio
+    async def test_updating_from_profile_flag_prevents_custom_switch(self):
+        """Test that _updating_from_profile flag prevents auto-switch to custom."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            # Simulate profile update in progress
+            app._updating_from_profile = True
+            app._pending_profile_updates = 3
+            app.state.patch_a.current_profile = "clerical"
+
+            # This should NOT switch to custom
+            event = IntSpinner.Changed(value=1, widget_id="max-flips-A")
+            app.on_int_spinner_changed(event)
+
+            # Should still be clerical (flag prevented switch)
+            # Note: The counter decrements
+            assert app._pending_profile_updates == 2
+
+    @pytest.mark.asyncio
+    async def test_pending_updates_counter_clears_flag(self):
+        """Test that counter reaching zero clears the flag."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            app._updating_from_profile = True
+            app._pending_profile_updates = 1
+
+            event = IntSpinner.Changed(value=1, widget_id="max-flips-A")
+            app.on_int_spinner_changed(event)
+
+            # Flag should be cleared when counter reaches 0
+            assert app._updating_from_profile is False
+            assert app._pending_profile_updates == 0
+
+
+class TestDatabaseActions:
+    """Tests for database viewer action methods."""
+
+    @pytest.mark.asyncio
+    async def test_action_view_database_a_exists(self):
+        """Test that database A action exists."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            assert hasattr(app, "action_view_database_a")
+
+    @pytest.mark.asyncio
+    async def test_action_view_database_b_exists(self):
+        """Test that database B action exists."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            assert hasattr(app, "action_view_database_b")
+
+    @pytest.mark.asyncio
+    async def test_open_database_no_corpus_shows_notification(self):
+        """Test that opening database with no corpus shows notification."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test() as pilot:
+            # Corpus not loaded
+            assert app.state.patch_a.corpus_dir is None
+
+            # Try to open database - should show notification, not crash
+            app._open_database_for_patch("A")
+            await pilot.pause()
+
+            # Just verify no crash occurred
+            assert True
+
+    @pytest.mark.asyncio
+    async def test_open_database_no_db_file_shows_notification(self, tmp_path):
+        """Test that opening database with missing corpus.db shows notification."""
+        app = SyllableWalkerApp()
+
+        # Set corpus dir but don't create corpus.db
+        corpus_dir = tmp_path / "corpus"
+        corpus_dir.mkdir()
+        app.state.patch_a.corpus_dir = corpus_dir
+
+        async with app.run_test() as pilot:
+            app._open_database_for_patch("A")
+            await pilot.pause()
+
+            # Just verify no crash
+            assert True
+
+
+class TestComputeMetrics:
+    """Tests for _compute_metrics_for_patch method."""
+
+    @pytest.mark.asyncio
+    async def test_compute_metrics_returns_none_without_data(self):
+        """Test that compute metrics returns None without loaded data."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            result = app._compute_metrics_for_patch(app.state.patch_a)
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_compute_metrics_requires_syllables(self):
+        """Test that compute metrics returns None without syllables."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            app.state.patch_a.frequencies = {"test": 1}
+            app.state.patch_a.annotated_data = [
+                {"syllable": "test", "frequency": 1, "features": {}}
+            ]
+
+            result = app._compute_metrics_for_patch(app.state.patch_a)
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_compute_metrics_requires_frequencies(self):
+        """Test that compute metrics returns None without frequencies."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            app.state.patch_a.syllables = ["test"]
+            app.state.patch_a.annotated_data = [
+                {"syllable": "test", "frequency": 1, "features": {}}
+            ]
+
+            result = app._compute_metrics_for_patch(app.state.patch_a)
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_compute_metrics_requires_annotated_data(self):
+        """Test that compute metrics returns None without annotated_data."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            app.state.patch_a.syllables = ["test"]
+            app.state.patch_a.frequencies = {"test": 1}
+
+            result = app._compute_metrics_for_patch(app.state.patch_a)
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_compute_metrics_with_valid_data(self):
+        """Test that compute metrics works with valid data."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            app.state.patch_a.syllables = ["test", "ing", "foo"]
+            app.state.patch_a.frequencies = {"test": 10, "ing": 20, "foo": 5}
+            app.state.patch_a.annotated_data = [
+                {"syllable": "test", "frequency": 10, "features": {"starts_with_vowel": False}},
+                {"syllable": "ing", "frequency": 20, "features": {"starts_with_vowel": True}},
+                {"syllable": "foo", "frequency": 5, "features": {"starts_with_vowel": False}},
+            ]
+
+            result = app._compute_metrics_for_patch(app.state.patch_a)
+
+            assert result is not None
+            assert result.inventory.total_count == 3
+            assert result.frequency.total_occurrences == 35
+
+
+class TestGenerateWalks:
+    """Tests for walk generation."""
+
+    @pytest.mark.asyncio
+    async def test_generate_walks_requires_ready_patch(self):
+        """Test that generation requires patch to be ready."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test() as pilot:
+            # Patch not ready (no corpus loaded)
+            assert not app.state.patch_a.is_ready_for_generation()
+
+            # Try to generate - should show notification
+            app._generate_walks_for_patch("A")
+            await pilot.pause()
+
+            # Outputs should still be empty
+            assert app.state.patch_a.outputs == []

@@ -5,12 +5,15 @@ Tests validation logic for NLTK and Pyphen corpus directories without loading da
 """
 
 import json
+import sqlite3
+from pathlib import Path
 
 import pytest
 
 from build_tools.syllable_walk_tui.services.corpus import (
     get_corpus_info,
     load_annotated_data,
+    load_annotated_data_from_sqlite,
     load_corpus_data,
     validate_corpus_directory,
 )
@@ -666,3 +669,338 @@ class TestLoadAnnotatedData:
         assert len(data) == 1
         assert data[0]["syllable"] == "nltk"
         assert metadata["source"] in ("sqlite", "json")
+
+    def test_load_annotated_data_entry_not_dict(self, tmp_path):
+        """Test loading with non-dict entries in list raises ValueError."""
+        corpus_dir = tmp_path / "nltk_corpus"
+        corpus_dir.mkdir()
+        data_dir = corpus_dir / "data"
+        data_dir.mkdir()
+
+        (corpus_dir / "nltk_syllables_unique.txt").write_text("test\n")
+        (corpus_dir / "nltk_syllables_frequencies.json").write_text(json.dumps({"test": 1}))
+
+        # First entry is a string instead of dict
+        annotated = ["not a dict", {"syllable": "test", "frequency": 1, "features": {}}]
+        (data_dir / "nltk_syllables_annotated.json").write_text(json.dumps(annotated))
+
+        with pytest.raises(ValueError, match="should be objects"):
+            load_annotated_data(corpus_dir)
+
+
+class TestLoadAnnotatedDataFromSqlite:
+    """Tests for SQLite-specific annotated data loading."""
+
+    def _create_test_database(self, db_path: "Path", syllables: list[dict]):
+        """Helper to create a test corpus.db database."""
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Create metadata table
+        cursor.execute("""
+            CREATE TABLE metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        cursor.execute("INSERT INTO metadata (key, value) VALUES (?, ?)", ("source_tool", "test"))
+        cursor.execute(
+            "INSERT INTO metadata (key, value) VALUES (?, ?)",
+            ("generated_at", "2026-01-18T10:00:00"),
+        )
+
+        # Create syllables table
+        cursor.execute("""
+            CREATE TABLE syllables (
+                syllable TEXT PRIMARY KEY,
+                frequency INTEGER,
+                starts_with_vowel INTEGER,
+                starts_with_cluster INTEGER,
+                starts_with_heavy_cluster INTEGER,
+                contains_plosive INTEGER,
+                contains_fricative INTEGER,
+                contains_liquid INTEGER,
+                contains_nasal INTEGER,
+                short_vowel INTEGER,
+                long_vowel INTEGER,
+                ends_with_vowel INTEGER,
+                ends_with_nasal INTEGER,
+                ends_with_stop INTEGER
+            )
+        """)
+
+        # Insert test data
+        for syl in syllables:
+            features = syl.get("features", {})
+            cursor.execute(
+                """INSERT INTO syllables (
+                    syllable, frequency,
+                    starts_with_vowel, starts_with_cluster, starts_with_heavy_cluster,
+                    contains_plosive, contains_fricative, contains_liquid, contains_nasal,
+                    short_vowel, long_vowel,
+                    ends_with_vowel, ends_with_nasal, ends_with_stop
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    syl["syllable"],
+                    syl["frequency"],
+                    1 if features.get("starts_with_vowel") else 0,
+                    1 if features.get("starts_with_cluster") else 0,
+                    1 if features.get("starts_with_heavy_cluster") else 0,
+                    1 if features.get("contains_plosive") else 0,
+                    1 if features.get("contains_fricative") else 0,
+                    1 if features.get("contains_liquid") else 0,
+                    1 if features.get("contains_nasal") else 0,
+                    1 if features.get("short_vowel") else 0,
+                    1 if features.get("long_vowel") else 0,
+                    1 if features.get("ends_with_vowel") else 0,
+                    1 if features.get("ends_with_nasal") else 0,
+                    1 if features.get("ends_with_stop") else 0,
+                ),
+            )
+
+        conn.commit()
+        conn.close()
+
+    def test_load_sqlite_database_success(self, tmp_path):
+        """Test loading data from SQLite database directly."""
+        db_path = tmp_path / "corpus.db"
+
+        test_data = [
+            {
+                "syllable": "test",
+                "frequency": 100,
+                "features": {
+                    "starts_with_vowel": False,
+                    "starts_with_cluster": False,
+                    "ends_with_vowel": False,
+                    "contains_plosive": True,
+                },
+            },
+            {
+                "syllable": "ing",
+                "frequency": 500,
+                "features": {
+                    "starts_with_vowel": True,
+                    "ends_with_nasal": True,
+                },
+            },
+        ]
+        self._create_test_database(db_path, test_data)
+
+        result = load_annotated_data_from_sqlite(db_path)
+
+        assert len(result) == 2
+        # Results should be sorted by syllable
+        assert result[0]["syllable"] == "ing"
+        assert result[1]["syllable"] == "test"
+
+        # Check features are properly loaded as booleans
+        assert result[0]["features"]["starts_with_vowel"] is True
+        assert result[0]["features"]["ends_with_nasal"] is True
+        assert result[1]["features"]["contains_plosive"] is True
+        assert result[1]["features"]["starts_with_vowel"] is False
+
+    def test_load_sqlite_database_nonexistent(self, tmp_path):
+        """Test loading from nonexistent database raises FileNotFoundError."""
+        db_path = tmp_path / "nonexistent.db"
+
+        with pytest.raises(FileNotFoundError, match="SQLite database not found"):
+            load_annotated_data_from_sqlite(db_path)
+
+    def test_load_sqlite_database_corrupted(self, tmp_path):
+        """Test loading from corrupted database raises sqlite3.Error."""
+        db_path = tmp_path / "corrupted.db"
+        db_path.write_text("not a valid sqlite database")
+
+        with pytest.raises(sqlite3.Error):
+            load_annotated_data_from_sqlite(db_path)
+
+    def test_load_sqlite_database_missing_table(self, tmp_path):
+        """Test loading from database missing syllables table raises error."""
+        db_path = tmp_path / "empty.db"
+
+        # Create database with only metadata table
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE metadata (key TEXT, value TEXT)")
+        conn.close()
+
+        with pytest.raises(sqlite3.Error):
+            load_annotated_data_from_sqlite(db_path)
+
+    def test_load_sqlite_features_all_boolean(self, tmp_path):
+        """Test that all feature values are converted to booleans."""
+        db_path = tmp_path / "corpus.db"
+
+        test_data = [
+            {
+                "syllable": "aa",
+                "frequency": 50,
+                "features": {
+                    "starts_with_vowel": True,
+                    "starts_with_cluster": False,
+                    "starts_with_heavy_cluster": False,
+                    "contains_plosive": True,
+                    "contains_fricative": False,
+                    "contains_liquid": True,
+                    "contains_nasal": False,
+                    "short_vowel": True,
+                    "long_vowel": False,
+                    "ends_with_vowel": True,
+                    "ends_with_nasal": False,
+                    "ends_with_stop": False,
+                },
+            }
+        ]
+        self._create_test_database(db_path, test_data)
+
+        result = load_annotated_data_from_sqlite(db_path)
+
+        assert len(result) == 1
+        features = result[0]["features"]
+
+        # All values should be bool, not int
+        for key, value in features.items():
+            assert isinstance(value, bool), f"Feature {key} should be bool, got {type(value)}"
+
+
+class TestLoadAnnotatedDataHybridLoading:
+    """Tests for hybrid SQLite/JSON loading behavior."""
+
+    def _create_test_database(self, db_path: "Path", syllables: list[dict]):
+        """Helper to create a test corpus.db database."""
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Create metadata table
+        cursor.execute("""
+            CREATE TABLE metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        cursor.execute("INSERT INTO metadata (key, value) VALUES (?, ?)", ("source_tool", "test"))
+
+        # Create syllables table
+        cursor.execute("""
+            CREATE TABLE syllables (
+                syllable TEXT PRIMARY KEY,
+                frequency INTEGER,
+                starts_with_vowel INTEGER,
+                starts_with_cluster INTEGER,
+                starts_with_heavy_cluster INTEGER,
+                contains_plosive INTEGER,
+                contains_fricative INTEGER,
+                contains_liquid INTEGER,
+                contains_nasal INTEGER,
+                short_vowel INTEGER,
+                long_vowel INTEGER,
+                ends_with_vowel INTEGER,
+                ends_with_nasal INTEGER,
+                ends_with_stop INTEGER
+            )
+        """)
+
+        # Insert test data
+        for syl in syllables:
+            features = syl.get("features", {})
+            cursor.execute(
+                """INSERT INTO syllables (
+                    syllable, frequency,
+                    starts_with_vowel, starts_with_cluster, starts_with_heavy_cluster,
+                    contains_plosive, contains_fricative, contains_liquid, contains_nasal,
+                    short_vowel, long_vowel,
+                    ends_with_vowel, ends_with_nasal, ends_with_stop
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    syl["syllable"],
+                    syl["frequency"],
+                    1 if features.get("starts_with_vowel") else 0,
+                    1 if features.get("starts_with_cluster") else 0,
+                    1 if features.get("starts_with_heavy_cluster") else 0,
+                    1 if features.get("contains_plosive") else 0,
+                    1 if features.get("contains_fricative") else 0,
+                    1 if features.get("contains_liquid") else 0,
+                    1 if features.get("contains_nasal") else 0,
+                    1 if features.get("short_vowel") else 0,
+                    1 if features.get("long_vowel") else 0,
+                    1 if features.get("ends_with_vowel") else 0,
+                    1 if features.get("ends_with_nasal") else 0,
+                    1 if features.get("ends_with_stop") else 0,
+                ),
+            )
+
+        conn.commit()
+        conn.close()
+
+    def test_prefers_sqlite_over_json(self, tmp_path):
+        """Test that SQLite is preferred when both formats are available."""
+        corpus_dir = tmp_path / "nltk_corpus"
+        corpus_dir.mkdir()
+        data_dir = corpus_dir / "data"
+        data_dir.mkdir()
+
+        # Create corpus validation files
+        (corpus_dir / "nltk_syllables_unique.txt").write_text("sqlite\njson\n")
+        (corpus_dir / "nltk_syllables_frequencies.json").write_text(
+            json.dumps({"sqlite": 100, "json": 50})
+        )
+
+        # Create both SQLite and JSON
+        sqlite_data = [
+            {"syllable": "sqlite", "frequency": 100, "features": {"starts_with_vowel": False}}
+        ]
+        self._create_test_database(data_dir / "corpus.db", sqlite_data)
+
+        json_data = [{"syllable": "json", "frequency": 50, "features": {"starts_with_vowel": True}}]
+        (data_dir / "nltk_syllables_annotated.json").write_text(json.dumps(json_data))
+
+        data, metadata = load_annotated_data(corpus_dir)
+
+        # Should load from SQLite (preferred)
+        assert metadata["source"] == "sqlite"
+        assert metadata["file_name"] == "corpus.db"
+        assert data[0]["syllable"] == "sqlite"
+
+    def test_falls_back_to_json_when_sqlite_missing(self, tmp_path):
+        """Test that JSON is used when SQLite is not available."""
+        corpus_dir = tmp_path / "nltk_corpus"
+        corpus_dir.mkdir()
+        data_dir = corpus_dir / "data"
+        data_dir.mkdir()
+
+        # Create corpus validation files
+        (corpus_dir / "nltk_syllables_unique.txt").write_text("json\n")
+        (corpus_dir / "nltk_syllables_frequencies.json").write_text(json.dumps({"json": 50}))
+
+        # Only create JSON (no SQLite)
+        json_data = [{"syllable": "json", "frequency": 50, "features": {"starts_with_vowel": True}}]
+        (data_dir / "nltk_syllables_annotated.json").write_text(json.dumps(json_data))
+
+        data, metadata = load_annotated_data(corpus_dir)
+
+        # Should load from JSON
+        assert metadata["source"] == "json"
+        assert "nltk_syllables_annotated.json" in metadata["file_name"]
+        assert data[0]["syllable"] == "json"
+
+    def test_load_time_reported_in_metadata(self, tmp_path):
+        """Test that load time is reported in metadata."""
+        corpus_dir = tmp_path / "nltk_corpus"
+        corpus_dir.mkdir()
+        data_dir = corpus_dir / "data"
+        data_dir.mkdir()
+
+        # Create corpus validation files
+        (corpus_dir / "nltk_syllables_unique.txt").write_text("test\n")
+        (corpus_dir / "nltk_syllables_frequencies.json").write_text(json.dumps({"test": 1}))
+
+        # Create annotated data
+        annotated = [{"syllable": "test", "frequency": 1, "features": {"starts_with_vowel": False}}]
+        (data_dir / "nltk_syllables_annotated.json").write_text(json.dumps(annotated))
+
+        data, metadata = load_annotated_data(corpus_dir)
+
+        assert "load_time_ms" in metadata
+        # Load time should be a numeric string
+        load_time = int(metadata["load_time_ms"])
+        assert load_time >= 0
