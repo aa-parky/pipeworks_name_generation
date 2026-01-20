@@ -5,6 +5,8 @@ Tests the metrics module which computes raw, objective statistics
 about corpus shape (inventory, frequency, feature saturation).
 """
 
+import random
+
 import pytest
 
 from build_tools.syllable_walk_tui.services.metrics import (
@@ -13,11 +15,15 @@ from build_tools.syllable_walk_tui.services.metrics import (
     FeatureSaturationMetrics,
     FrequencyMetrics,
     InventoryMetrics,
+    PoleExemplars,
     compute_corpus_shape_metrics,
     compute_feature_saturation_metrics,
     compute_frequency_metrics,
     compute_inventory_metrics,
+    sample_pole_exemplars,
+    score_syllable_on_axis,
 )
+from build_tools.syllable_walk_tui.services.terrain_weights import AxisWeights
 
 # =============================================================================
 # Test Fixtures
@@ -494,3 +500,211 @@ class TestFeatureNames:
         }
 
         assert set(FEATURE_NAMES) == expected
+
+
+# =============================================================================
+# Syllable Scoring Tests
+# =============================================================================
+
+
+class TestScoreSyllableOnAxis:
+    """Tests for score_syllable_on_axis function."""
+
+    def test_score_all_positive_features(self):
+        """Syllable with all positive-weight features scores high."""
+        features = {"contains_plosive": True, "ends_with_stop": True}
+        weights = AxisWeights({"contains_plosive": 0.6, "ends_with_stop": 1.0})
+        score = score_syllable_on_axis(features, weights)
+        assert score == pytest.approx(1.6)
+
+    def test_score_mixed_features(self):
+        """Mixed features produce intermediate score."""
+        features = {"contains_liquid": True, "contains_plosive": True}
+        weights = AxisWeights({"contains_liquid": -0.8, "contains_plosive": 0.6})
+        score = score_syllable_on_axis(features, weights)
+        assert score == pytest.approx(-0.2)
+
+    def test_score_no_matching_features(self):
+        """No matching features produces zero score."""
+        features = {"unknown_feature": True}
+        weights = AxisWeights({"contains_plosive": 0.6})
+        score = score_syllable_on_axis(features, weights)
+        assert score == 0.0
+
+    def test_score_false_features_not_counted(self):
+        """Features with False values are not counted."""
+        features = {"contains_plosive": False, "ends_with_stop": True}
+        weights = AxisWeights({"contains_plosive": 0.6, "ends_with_stop": 1.0})
+        score = score_syllable_on_axis(features, weights)
+        assert score == pytest.approx(1.0)
+
+    def test_score_empty_features(self):
+        """Empty features dict produces zero score."""
+        features: dict[str, bool] = {}
+        weights = AxisWeights({"contains_plosive": 0.6})
+        score = score_syllable_on_axis(features, weights)
+        assert score == 0.0
+
+    def test_score_empty_weights(self):
+        """Empty weights produces zero score."""
+        features = {"contains_plosive": True}
+        weights = AxisWeights({})
+        score = score_syllable_on_axis(features, weights)
+        assert score == 0.0
+
+
+# =============================================================================
+# PoleExemplars Tests
+# =============================================================================
+
+
+class TestPoleExemplars:
+    """Tests for PoleExemplars dataclass."""
+
+    def test_creation(self):
+        """Test PoleExemplars can be created."""
+        exemplars = PoleExemplars(
+            axis_name="shape",
+            low_pole_exemplars=("mala", "luno"),
+            high_pole_exemplars=("krask", "thrix"),
+        )
+        assert exemplars.axis_name == "shape"
+        assert exemplars.low_pole_exemplars == ("mala", "luno")
+        assert exemplars.high_pole_exemplars == ("krask", "thrix")
+
+    def test_immutability(self):
+        """Test PoleExemplars is frozen."""
+        exemplars = PoleExemplars(
+            axis_name="shape",
+            low_pole_exemplars=("aa",),
+            high_pole_exemplars=("kk",),
+        )
+        with pytest.raises(Exception):
+            exemplars.axis_name = "craft"  # type: ignore[misc]
+
+    def test_empty_tuples(self):
+        """Test PoleExemplars can have empty tuples."""
+        exemplars = PoleExemplars(
+            axis_name="test",
+            low_pole_exemplars=(),
+            high_pole_exemplars=(),
+        )
+        assert exemplars.low_pole_exemplars == ()
+        assert exemplars.high_pole_exemplars == ()
+
+
+# =============================================================================
+# Sample Pole Exemplars Tests
+# =============================================================================
+
+
+class TestSamplePoleExemplars:
+    """Tests for sample_pole_exemplars function."""
+
+    @pytest.fixture
+    def sample_corpus_data(self):
+        """Sample corpus data with varied features for testing exemplars."""
+        return [
+            # Low pole syllables (negative features)
+            {"syllable": "aa", "features": {"ends_with_vowel": True, "contains_liquid": True}},
+            {"syllable": "io", "features": {"ends_with_vowel": True, "contains_liquid": True}},
+            {"syllable": "mala", "features": {"ends_with_vowel": True, "contains_liquid": True}},
+            # Middle syllables
+            {"syllable": "mid", "features": {"contains_plosive": True, "contains_liquid": True}},
+            {"syllable": "bal", "features": {"contains_plosive": True, "ends_with_vowel": True}},
+            # High pole syllables (positive features)
+            {"syllable": "krask", "features": {"contains_plosive": True, "ends_with_stop": True}},
+            {"syllable": "thrix", "features": {"contains_plosive": True, "ends_with_stop": True}},
+            {"syllable": "strunk", "features": {"contains_plosive": True, "ends_with_stop": True}},
+        ]
+
+    def test_sample_basic(self, sample_corpus_data):
+        """Basic sampling returns correct structure."""
+        weights = AxisWeights(
+            {
+                "ends_with_vowel": -1.0,
+                "contains_liquid": -0.5,
+                "contains_plosive": 0.6,
+                "ends_with_stop": 1.0,
+            }
+        )
+        exemplars = sample_pole_exemplars(sample_corpus_data, weights, "shape", n_exemplars=2)
+
+        assert exemplars.axis_name == "shape"
+        assert len(exemplars.low_pole_exemplars) == 2
+        assert len(exemplars.high_pole_exemplars) == 2
+
+        # Low pole should have vowel-ending syllables
+        for syl in exemplars.low_pole_exemplars:
+            assert syl in ("aa", "io", "mala")
+
+        # High pole should have stop-ending syllables
+        for syl in exemplars.high_pole_exemplars:
+            assert syl in ("krask", "thrix", "strunk")
+
+    def test_deterministic_without_rng(self, sample_corpus_data):
+        """Same input produces same output without RNG."""
+        weights = AxisWeights({"ends_with_vowel": -1.0, "ends_with_stop": 1.0})
+
+        result1 = sample_pole_exemplars(sample_corpus_data, weights, "test", n_exemplars=2)
+        result2 = sample_pole_exemplars(sample_corpus_data, weights, "test", n_exemplars=2)
+
+        assert result1.low_pole_exemplars == result2.low_pole_exemplars
+        assert result1.high_pole_exemplars == result2.high_pole_exemplars
+
+    def test_rng_provides_variety(self, sample_corpus_data):
+        """RNG shuffles exemplars for variety."""
+        weights = AxisWeights({"ends_with_vowel": -1.0, "ends_with_stop": 1.0})
+
+        # With different RNG seeds, should sometimes get different results
+        results = set()
+        for seed in range(100):
+            rng = random.Random(seed)
+            result = sample_pole_exemplars(
+                sample_corpus_data, weights, "test", n_exemplars=2, rng=rng
+            )
+            results.add(result.low_pole_exemplars)
+
+        # Should have more than one unique result due to shuffling
+        assert len(results) > 1
+
+    def test_empty_data(self):
+        """Empty data returns empty exemplars."""
+        weights = AxisWeights({"contains_plosive": 1.0})
+        exemplars = sample_pole_exemplars([], weights, "test", n_exemplars=3)
+
+        assert exemplars.axis_name == "test"
+        assert exemplars.low_pole_exemplars == ()
+        assert exemplars.high_pole_exemplars == ()
+
+    def test_thin_corpus_handled(self):
+        """Gracefully handles corpora with few syllables."""
+        data = [{"syllable": "only", "features": {}}]
+        weights = AxisWeights({"contains_plosive": 1.0})
+        exemplars = sample_pole_exemplars(data, weights, "test", n_exemplars=3)
+
+        # Should return what's available
+        assert len(exemplars.low_pole_exemplars) == 1
+        assert len(exemplars.high_pole_exemplars) == 1
+
+    def test_single_exemplar_requested(self, sample_corpus_data):
+        """Can request just one exemplar per pole."""
+        weights = AxisWeights({"ends_with_vowel": -1.0, "ends_with_stop": 1.0})
+        exemplars = sample_pole_exemplars(sample_corpus_data, weights, "test", n_exemplars=1)
+
+        assert len(exemplars.low_pole_exemplars) == 1
+        assert len(exemplars.high_pole_exemplars) == 1
+
+    def test_all_features_false(self):
+        """Handles data where all features are False."""
+        data = [
+            {"syllable": "a", "features": {}},
+            {"syllable": "b", "features": {}},
+            {"syllable": "c", "features": {}},
+        ]
+        weights = AxisWeights({"contains_plosive": 1.0})
+        exemplars = sample_pole_exemplars(data, weights, "test", n_exemplars=2)
+
+        # All should score 0, so order is by original sort stability
+        assert len(exemplars.low_pole_exemplars) == 2
+        assert len(exemplars.high_pole_exemplars) == 2

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
         FeatureSaturationMetrics,
         FrequencyMetrics,
         InventoryMetrics,
+        PoleExemplars,
         TerrainMetrics,
     )
 
@@ -130,6 +131,31 @@ def format_feature_saturation(feat: FeatureSaturationMetrics) -> str:
     return "\n".join(lines)
 
 
+def _format_exemplars_line(
+    exemplars: PoleExemplars | None,
+    low_label: str,
+    high_label: str,
+) -> str | None:
+    """
+    Format exemplar syllables for both poles of an axis.
+
+    Args:
+        exemplars: PoleExemplars containing syllables from each pole, or None
+        low_label: Label for low pole (e.g., "round")
+        high_label: Label for high pole (e.g., "jagged")
+
+    Returns:
+        Formatted string or None if no exemplars
+    """
+    if exemplars is None:
+        return None
+
+    low_str = ", ".join(exemplars.low_pole_exemplars) or "(none)"
+    high_str = ", ".join(exemplars.high_pole_exemplars) or "(none)"
+
+    return f"    {low_label}: {low_str}    {high_label}: {high_str}"
+
+
 def format_terrain_metrics(terrain: TerrainMetrics) -> str:
     """
     Format terrain metrics as text with ASCII bars.
@@ -163,13 +189,24 @@ def format_terrain_metrics(terrain: TerrainMetrics) -> str:
         "",
         "  Shape: Round <-> Jagged (Bouba/Kiki)",
         f"    {render_bar(terrain.shape_score, terrain.shape_label)}",
-        "",
-        "  Craft: Flowing <-> Worked (Sung/Forged)",
-        f"    {render_bar(terrain.craft_score, terrain.craft_label)}",
-        "",
-        "  Space: Open <-> Dense (Valley/Workshop)",
-        f"    {render_bar(terrain.space_score, terrain.space_label)}",
     ]
+    exemplar_line = _format_exemplars_line(terrain.shape_exemplars, "round", "jagged")
+    if exemplar_line:
+        lines.append(exemplar_line)
+    lines.append("")
+
+    lines.append("  Craft: Flowing <-> Worked (Sung/Forged)")
+    lines.append(f"    {render_bar(terrain.craft_score, terrain.craft_label)}")
+    exemplar_line = _format_exemplars_line(terrain.craft_exemplars, "flowing", "worked")
+    if exemplar_line:
+        lines.append(exemplar_line)
+    lines.append("")
+
+    lines.append("  Space: Open <-> Dense (Valley/Workshop)")
+    lines.append(f"    {render_bar(terrain.space_score, terrain.space_label)}")
+    exemplar_line = _format_exemplars_line(terrain.space_exemplars, "open", "dense")
+    if exemplar_line:
+        lines.append(exemplar_line)
 
     return "\n".join(lines)
 

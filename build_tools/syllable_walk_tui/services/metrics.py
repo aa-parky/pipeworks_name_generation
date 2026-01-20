@@ -27,6 +27,7 @@ Usage:
 
 from __future__ import annotations
 
+import random
 import statistics
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -346,6 +347,25 @@ def compute_feature_saturation_metrics(
 
 
 @dataclass(frozen=True)
+class PoleExemplars:
+    """
+    Exemplar syllables from each pole of a terrain axis.
+
+    These concrete examples help users understand what syllables
+    represent each end of the phonaesthetic spectrum.
+
+    Attributes:
+        axis_name: Name of the axis ("shape", "craft", or "space")
+        low_pole_exemplars: Syllables from the low pole (Round/Flowing/Open)
+        high_pole_exemplars: Syllables from the high pole (Jagged/Worked/Dense)
+    """
+
+    axis_name: str
+    low_pole_exemplars: tuple[str, ...]
+    high_pole_exemplars: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class TerrainMetrics:
     """
     Phonaesthetic terrain metrics describing corpus character.
@@ -364,6 +384,9 @@ class TerrainMetrics:
         shape_label: Human-readable label for shape position
         craft_label: Human-readable label for craft position
         space_label: Human-readable label for space position
+        shape_exemplars: Optional exemplar syllables for shape axis
+        craft_exemplars: Optional exemplar syllables for craft axis
+        space_exemplars: Optional exemplar syllables for space axis
     """
 
     shape_score: float
@@ -372,6 +395,9 @@ class TerrainMetrics:
     shape_label: str
     craft_label: str
     space_label: str
+    shape_exemplars: PoleExemplars | None = None
+    craft_exemplars: PoleExemplars | None = None
+    space_exemplars: PoleExemplars | None = None
 
 
 def _compute_axis_score(
@@ -409,6 +435,87 @@ def _compute_axis_score(
     return max(0.0, min(1.0, normalized))
 
 
+def score_syllable_on_axis(
+    features: dict[str, bool],
+    axis_weights: AxisWeights,
+) -> float:
+    """
+    Compute axis score for a single syllable from its boolean features.
+
+    Unlike _compute_axis_score() which uses corpus percentages, this uses
+    binary features (0 or 1) to rank individual syllables.
+
+    Args:
+        features: Dictionary of feature_name -> boolean
+        axis_weights: AxisWeights containing feature-to-weight mappings
+
+    Returns:
+        Raw weighted sum (not normalized). Higher = more toward high pole.
+    """
+    weighted_sum = 0.0
+    for feature_name, weight in axis_weights.items():
+        if features.get(feature_name, False):
+            weighted_sum += weight
+    return weighted_sum
+
+
+def sample_pole_exemplars(
+    annotated_data: Sequence[dict],
+    axis_weights: AxisWeights,
+    axis_name: str,
+    n_exemplars: int = 3,
+    rng: random.Random | None = None,
+) -> PoleExemplars:
+    """
+    Sample exemplar syllables from each pole of an axis.
+
+    Scores all syllables in the corpus and samples from the low and high
+    tails to provide concrete examples of syllables at each pole.
+
+    Args:
+        annotated_data: List of {"syllable": str, "features": dict} entries
+        axis_weights: Weights for the axis
+        axis_name: Name of axis ("shape", "craft", "space")
+        n_exemplars: Number of exemplars per pole (default 3)
+        rng: Optional RNG for shuffling within tails (isolated from generation)
+
+    Returns:
+        PoleExemplars with syllables from low and high poles
+    """
+    if not annotated_data:
+        return PoleExemplars(
+            axis_name=axis_name,
+            low_pole_exemplars=(),
+            high_pole_exemplars=(),
+        )
+
+    # Score all syllables
+    scored = [
+        (entry["syllable"], score_syllable_on_axis(entry["features"], axis_weights))
+        for entry in annotated_data
+    ]
+
+    # Shuffle BEFORE sorting if RNG provided - this randomizes tie-breaking
+    # (Python's sort is stable, so equal scores would otherwise stay in
+    # original alphabetical order, always giving 'a' syllables for low pole
+    # and 'z' syllables for high pole)
+    if rng:
+        rng.shuffle(scored)
+
+    # Sort by score (ascending: low pole first, high pole last)
+    scored.sort(key=lambda x: x[1])
+
+    # Take exemplars directly from the sorted tails
+    low_exemplars = tuple(s[0] for s in scored[:n_exemplars])
+    high_exemplars = tuple(s[0] for s in scored[-n_exemplars:])
+
+    return PoleExemplars(
+        axis_name=axis_name,
+        low_pole_exemplars=low_exemplars,
+        high_pole_exemplars=high_exemplars,
+    )
+
+
 def _score_to_label(score: float, low_label: str, high_label: str) -> str:
     """
     Convert a 0-1 score to a human-readable label.
@@ -432,6 +539,9 @@ def _score_to_label(score: float, low_label: str, high_label: str) -> str:
 def compute_terrain_metrics(
     feature_saturation: FeatureSaturationMetrics,
     weights: TerrainWeights | None = None,
+    annotated_data: Sequence[dict] | None = None,
+    exemplar_rng: random.Random | None = None,
+    n_exemplars: int = 3,
 ) -> TerrainMetrics:
     """
     Compute phonaesthetic terrain metrics from feature saturation.
@@ -446,6 +556,11 @@ def compute_terrain_metrics(
                  DEFAULT_TERRAIN_WEIGHTS from terrain_weights module.
                  Custom weights allow calibration for different phonaesthetic
                  models or user preferences.
+        annotated_data: Optional list of {"syllable": str, "features": dict}
+                        entries. If provided, pole exemplars will be computed.
+        exemplar_rng: Optional RNG for shuffling exemplars. Isolated from
+                      name generation to maintain determinism.
+        n_exemplars: Number of exemplars per pole (default 3)
 
     Returns:
         TerrainMetrics with scores and labels for all three axes
@@ -461,6 +576,12 @@ def compute_terrain_metrics(
         ... )
         >>> custom = TerrainWeights(shape=AxisWeights({"contains_plosive": 1.5}))
         >>> terrain = compute_terrain_metrics(feature_saturation, weights=custom)
+
+        # With exemplars:
+        >>> terrain = compute_terrain_metrics(
+        ...     feature_saturation, annotated_data=corpus_data
+        ... )
+        >>> print(terrain.shape_exemplars.low_pole_exemplars)
     """
     if weights is None:
         weights = DEFAULT_TERRAIN_WEIGHTS
@@ -469,6 +590,22 @@ def compute_terrain_metrics(
     craft_score = _compute_axis_score(feature_saturation, weights.craft)
     space_score = _compute_axis_score(feature_saturation, weights.space)
 
+    # Compute exemplars if annotated_data provided
+    shape_exemplars = None
+    craft_exemplars = None
+    space_exemplars = None
+
+    if annotated_data:
+        shape_exemplars = sample_pole_exemplars(
+            annotated_data, weights.shape, "shape", n_exemplars, exemplar_rng
+        )
+        craft_exemplars = sample_pole_exemplars(
+            annotated_data, weights.craft, "craft", n_exemplars, exemplar_rng
+        )
+        space_exemplars = sample_pole_exemplars(
+            annotated_data, weights.space, "space", n_exemplars, exemplar_rng
+        )
+
     return TerrainMetrics(
         shape_score=shape_score,
         craft_score=craft_score,
@@ -476,6 +613,9 @@ def compute_terrain_metrics(
         shape_label=_score_to_label(shape_score, "ROUND", "JAGGED"),
         craft_label=_score_to_label(craft_score, "FLOWING", "WORKED"),
         space_label=_score_to_label(space_score, "OPEN", "DENSE"),
+        shape_exemplars=shape_exemplars,
+        craft_exemplars=craft_exemplars,
+        space_exemplars=space_exemplars,
     )
 
 
@@ -541,5 +681,5 @@ def compute_corpus_shape_metrics(
         inventory=compute_inventory_metrics(syllables),
         frequency=compute_frequency_metrics(frequencies),
         feature_saturation=feature_saturation,
-        terrain=compute_terrain_metrics(feature_saturation),
+        terrain=compute_terrain_metrics(feature_saturation, annotated_data=annotated_data),
     )

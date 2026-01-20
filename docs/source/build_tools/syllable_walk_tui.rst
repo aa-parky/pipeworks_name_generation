@@ -218,6 +218,10 @@ Keyboard Shortcuts
      - Open Analysis modal screen
    * - ``w``
      - Open Terrain Weights editor (from Analysis screen)
+   * - ``e``
+     - Export metrics to text file (from Analysis screen)
+   * - ``r``
+     - Refresh pole exemplars (from Analysis screen)
    * - ``d``
      - Open Database Viewer for Patch A
    * - ``D`` (Shift+d)
@@ -349,12 +353,28 @@ phonetic features into three phonaesthetic axes:
 
    TERRAIN
 
-     Shape:
-       ██████████░░░░░ JAGGED
-     Craft:
-       ████████░░░░░░░ WORKED
-     Space:
-       ████░░░░░░░░░░░ OPEN
+     Shape: Round ↔ Jagged (Bouba/Kiki)
+       ██████████████████░░░░░░░░░░░░ BALANCED +0.015
+       round: mala, luno, anei    jagged: krask, thrix
+
+     Craft: Flowing ↔ Worked (Sung/Forged)
+       ███████████████████░░░░░░░░░░░ BALANCED +0.020
+       flowing: lira, meno    worked: strunk, grak
+
+     Space: Open ↔ Dense (Valley/Workshop)
+       ██████████████░░░░░░░░░░░░░░░░ BALANCED -0.009
+       open: aa, io, ele    dense: krist, blent
+
+Each axis displays:
+
+- **Hi-fi bar** (30 characters) showing position on the axis
+- **Label** (ROUND, BALANCED, JAGGED, etc.) based on score thresholds
+- **Delta** (+0.015, -0.009, etc.) showing deviation from neutral (0.5)
+- **Pole exemplars** showing concrete syllables from each end of the axis
+
+The pole exemplars help users understand what each phonaesthetic pole *sounds like*
+by showing real syllables from the corpus that score at each extreme. Press ``r``
+to refresh and see different exemplars sampled from the corpus.
 
 The three axes represent:
 

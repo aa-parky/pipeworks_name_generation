@@ -12,7 +12,8 @@ Design Philosophy:
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import random
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -26,6 +27,7 @@ from build_tools.syllable_walk_tui.modules.analyzer.exporter import (
 )
 from build_tools.syllable_walk_tui.services.metrics import (
     CorpusShapeMetrics,
+    PoleExemplars,
     TerrainMetrics,
     compute_terrain_metrics,
 )
@@ -91,6 +93,31 @@ def render_terrain_bar(score: float, label: str) -> str:
     bar = BAR_FILLED * filled_count + BAR_EMPTY * empty_count
     delta = format_delta(score)
     return f"{bar} {label:8} {delta}"
+
+
+def render_exemplars_line(
+    exemplars: PoleExemplars | None,
+    low_label: str,
+    high_label: str,
+) -> str:
+    """
+    Render exemplar syllables for both poles of an axis.
+
+    Args:
+        exemplars: PoleExemplars containing syllables from each pole, or None
+        low_label: Label for low pole (e.g., "round")
+        high_label: Label for high pole (e.g., "jagged")
+
+    Returns:
+        Formatted string like "    round: mala, luno    jagged: krask, thrix"
+    """
+    if exemplars is None:
+        return ""
+
+    low_str = ", ".join(exemplars.low_pole_exemplars) or "(none)"
+    high_str = ", ".join(exemplars.high_pole_exemplars) or "(none)"
+
+    return f"    {low_label}: {low_str}    {high_label}: {high_str}"
 
 
 def format_weight_chip(feature: str, weight: float, selected: bool = False) -> str:
@@ -159,6 +186,11 @@ class TerrainDisplay(Vertical):
     TerrainDisplay .terrain-label {
         color: $text-muted;
     }
+
+    TerrainDisplay .terrain-exemplars {
+        color: $text-muted;
+        text-style: italic;
+    }
     """
 
     def __init__(self, terrain: TerrainMetrics | None = None) -> None:
@@ -186,6 +218,9 @@ class TerrainDisplay(Vertical):
             f"    {render_terrain_bar(self.terrain.shape_score, self.terrain.shape_label)}",
             classes="terrain-row",
         )
+        exemplars_line = render_exemplars_line(self.terrain.shape_exemplars, "round", "jagged")
+        if exemplars_line:
+            yield Label(exemplars_line, classes="terrain-exemplars")
         yield Label("", classes="terrain-row")
 
         # Craft axis (Flowing ↔ Worked) - Sung/Forged
@@ -194,6 +229,9 @@ class TerrainDisplay(Vertical):
             f"    {render_terrain_bar(self.terrain.craft_score, self.terrain.craft_label)}",
             classes="terrain-row",
         )
+        exemplars_line = render_exemplars_line(self.terrain.craft_exemplars, "flowing", "worked")
+        if exemplars_line:
+            yield Label(exemplars_line, classes="terrain-exemplars")
         yield Label("", classes="terrain-row")
 
         # Space axis (Open ↔ Dense) - Valley/Workshop
@@ -202,6 +240,9 @@ class TerrainDisplay(Vertical):
             f"    {render_terrain_bar(self.terrain.space_score, self.terrain.space_label)}",
             classes="terrain-row",
         )
+        exemplars_line = render_exemplars_line(self.terrain.space_exemplars, "open", "dense")
+        if exemplars_line:
+            yield Label(exemplars_line, classes="terrain-exemplars")
 
 
 class WeightsModal(Screen):
@@ -711,6 +752,7 @@ class AnalysisScreen(Screen):
         ("q", "close_screen", "Close"),
         ("e", "export_metrics", "Export"),
         ("w", "open_weights", "Weights"),
+        ("r", "refresh_exemplars", "Refresh"),
     ]
 
     DEFAULT_CSS = """
@@ -756,6 +798,8 @@ class AnalysisScreen(Screen):
         corpus_path_a: Path | None = None,
         corpus_path_b: Path | None = None,
         export_dir: Path | None = None,
+        annotated_data_a: Sequence[dict] | None = None,
+        annotated_data_b: Sequence[dict] | None = None,
     ) -> None:
         """
         Initialize analysis screen with pre-computed metrics.
@@ -766,6 +810,8 @@ class AnalysisScreen(Screen):
             corpus_path_a: Path to Patch A corpus directory
             corpus_path_b: Path to Patch B corpus directory
             export_dir: Directory for exports (defaults to _working/)
+            annotated_data_a: Optional annotated data for Patch A (for exemplars)
+            annotated_data_b: Optional annotated data for Patch B (for exemplars)
 
         Note:
             Metrics should be computed by the app before pushing this screen,
@@ -778,6 +824,10 @@ class AnalysisScreen(Screen):
         self.corpus_path_b = corpus_path_b
         self.export_dir = export_dir or Path("_working")
 
+        # Store annotated data for recomputing exemplars on refresh
+        self.annotated_data_a = annotated_data_a
+        self.annotated_data_b = annotated_data_b
+
         # Store feature saturation for re-computing terrain with different weights
         self.feature_saturation_a = metrics_a.feature_saturation if metrics_a else None
         self.feature_saturation_b = metrics_b.feature_saturation if metrics_b else None
@@ -786,10 +836,23 @@ class AnalysisScreen(Screen):
         self.weights_a = create_default_terrain_weights()
         self.weights_b = create_default_terrain_weights()
 
-    def _recompute_terrain(self) -> None:
-        """Recompute terrain metrics with current weights for each patch."""
+    def _recompute_terrain(self, new_exemplar_rng: bool = False) -> None:
+        """
+        Recompute terrain metrics with current weights for each patch.
+
+        Args:
+            new_exemplar_rng: If True, create a fresh RNG for exemplar variety.
+                              If False, reuses existing exemplars (deterministic).
+        """
+        exemplar_rng = random.Random() if new_exemplar_rng else None  # nosec B311
+
         if self.feature_saturation_a and self.metrics_a:
-            new_terrain = compute_terrain_metrics(self.feature_saturation_a, self.weights_a)
+            new_terrain = compute_terrain_metrics(
+                self.feature_saturation_a,
+                self.weights_a,
+                annotated_data=self.annotated_data_a,
+                exemplar_rng=exemplar_rng,
+            )
             self.metrics_a = CorpusShapeMetrics(
                 inventory=self.metrics_a.inventory,
                 frequency=self.metrics_a.frequency,
@@ -797,7 +860,12 @@ class AnalysisScreen(Screen):
                 terrain=new_terrain,
             )
         if self.feature_saturation_b and self.metrics_b:
-            new_terrain = compute_terrain_metrics(self.feature_saturation_b, self.weights_b)
+            new_terrain = compute_terrain_metrics(
+                self.feature_saturation_b,
+                self.weights_b,
+                annotated_data=self.annotated_data_b,
+                exemplar_rng=exemplar_rng,
+            )
             self.metrics_b = CorpusShapeMetrics(
                 inventory=self.metrics_b.inventory,
                 frequency=self.metrics_b.frequency,
@@ -828,7 +896,7 @@ class AnalysisScreen(Screen):
 
         # Footer
         yield Label(
-            "\\[w] weights  \\[e] export  |  \\[Esc] or \\[q] close",
+            "\\[w] weights  \\[e] export  \\[r] refresh  |  \\[Esc] or \\[q] close",
             id="analysis-footer",
             classes="footer-hint",
         )
@@ -865,3 +933,9 @@ class AnalysisScreen(Screen):
             self._refresh_display()
 
         self.app.push_screen(WeightsModal(self.weights_a, self.weights_b, on_weights_closed))
+
+    def action_refresh_exemplars(self) -> None:
+        """Resample exemplars with new RNG for variety."""
+        self._recompute_terrain(new_exemplar_rng=True)
+        self._refresh_display()
+        self.notify("Exemplars refreshed", severity="information")

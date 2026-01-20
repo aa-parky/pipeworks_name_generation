@@ -345,6 +345,8 @@ class SyllableWalkerApp(App):
                 metrics_b=metrics_b,
                 corpus_path_a=self.state.patch_a.corpus_dir,
                 corpus_path_b=self.state.patch_b.corpus_dir,
+                annotated_data_a=self.state.patch_a.annotated_data,
+                annotated_data_b=self.state.patch_b.annotated_data,
             )
         )
 
