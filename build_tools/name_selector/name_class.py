@@ -224,5 +224,5 @@ def get_default_policy_path() -> Path:
         if (parent / "pyproject.toml").exists():
             return parent / "data" / "name_classes.yml"
 
-    # Fallback to relative path
-    return Path("data/name_classes.yml")
+    # Fallback to relative path (only reached outside project structure)
+    return Path("data/name_classes.yml")  # pragma: no cover
