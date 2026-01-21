@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.2...pipeworks-name-generation-v0.5.3) (2026-01-21)
+
+
+### Features
+
+* **build_tools:** Add JSON meta file output to combiner and selector ([#18](https://github.com/aa-parky/pipeworks_name_generation/issues/18)) ([bb758e4](https://github.com/aa-parky/pipeworks_name_generation/commit/bb758e42f1b79c7a69c61ecf020eef3c9aff676b))
+
 ## [0.5.2](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.1...pipeworks-name-generation-v0.5.2) (2026-01-21)
 
 
