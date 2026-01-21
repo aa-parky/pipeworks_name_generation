@@ -25,6 +25,10 @@ Tool Overview
      - NLTK-specific normalization with fragment cleaning for phonetically coherent syllables
    * - :doc:`syllable_feature_annotator`
      - Phonetic feature detection (onset, nucleus, coda features)
+   * - :doc:`name_combiner`
+     - Generate N-syllable name candidates with feature aggregation
+   * - :doc:`name_selector`
+     - Filter and rank candidates against name class policies
    * - :doc:`corpus_sqlite_builder`
      - Convert annotated JSON to SQLite databases for fast TUI loading (optional performance optimization)
    * - :doc:`syllable_walk`
@@ -66,6 +70,17 @@ Quick Start
    # Annotate syllables with phonetic features
    python -m build_tools.syllable_feature_annotator
 
+   # Generate name candidates
+   python -m build_tools.name_combiner \
+       --run-dir _working/output/20260110_143022_pyphen/ \
+       --syllables 2 --count 10000
+
+   # Select names for a class
+   python -m build_tools.name_selector \
+       --run-dir _working/output/20260110_143022_pyphen/ \
+       --candidates candidates/pyphen_candidates_2syl.json \
+       --name-class first_name
+
    # (Optional) Convert to SQLite for faster TUI loading
    python -m build_tools.corpus_sqlite_builder _working/output/20260110_143022_pyphen/
 
@@ -89,6 +104,8 @@ Detailed Documentation
    pyphen_syllable_normaliser
    nltk_syllable_normaliser
    syllable_feature_annotator
+   name_combiner
+   name_selector
    corpus_sqlite_builder
    syllable_walk
    syllable_walk_tui

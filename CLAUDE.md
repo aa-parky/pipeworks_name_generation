@@ -53,6 +53,20 @@ python -m build_tools.nltk_syllable_normaliser --run-dir _working/output/2026011
 python -m build_tools.syllable_feature_annotator \
   --syllables _working/output/20260110_143022_pyphen/pyphen_syllables_unique.txt \
   --frequencies _working/output/20260110_143022_pyphen/pyphen_syllables_frequencies.json
+
+# Generate name candidates (Selection Policy Layer)
+python -m build_tools.name_combiner \
+  --run-dir _working/output/20260110_143022_pyphen/ \
+  --syllables 2 \
+  --count 10000 \
+  --seed 42
+
+# Select names by policy (first_name, last_name, place_name)
+python -m build_tools.name_selector \
+  --run-dir _working/output/20260110_143022_pyphen/ \
+  --candidates candidates/pyphen_candidates_2syl.json \
+  --name-class first_name \
+  --count 100
 ```
 
 For detailed command options, see [Development Guide](claude/development.md).
@@ -84,6 +98,8 @@ Detailed documentation is organized in the `claude/` directory:
   extraction runs
 - **[Analysis Tools](claude/build_tools/analysis_tools.md)** - Post-annotation analysis and
   visualization
+- **[Name Combiner]** - Structural name candidate generation from annotated syllables
+- **[Name Selector]** - Policy-based name filtering using the Name Class Matrix
 
 ## Build Pipeline Patterns
 
@@ -127,6 +143,45 @@ python -m build_tools.nltk_syllable_normaliser \
 # Creates (in-place): YYYYMMDD_HHMMSS_nltk/nltk_syllables_*.txt, nltk_syllables_*.json
 ```
 
+### Selection Policy Layer (Name Generation)
+
+After annotation, the Selection Policy Layer generates and filters name candidates:
+
+```bash
+# 1. Generate N-syllable candidates from annotated corpus
+python -m build_tools.name_combiner \
+  --run-dir _working/output/YYYYMMDD_HHMMSS_pyphen/ \
+  --syllables 2 \
+  --count 10000 \
+  --seed 42
+
+# Creates: YYYYMMDD_HHMMSS_pyphen/candidates/pyphen_candidates_2syl.json
+
+# 2. Select names using a policy (first_name, last_name, place_name)
+python -m build_tools.name_selector \
+  --run-dir _working/output/YYYYMMDD_HHMMSS_pyphen/ \
+  --candidates candidates/pyphen_candidates_2syl.json \
+  --name-class first_name \
+  --count 100
+
+# Creates: YYYYMMDD_HHMMSS_pyphen/selections/pyphen_first_name_2syl.json
+```
+
+**Name Class Policies** are defined in `data/name_classes.yml`:
+
+| Name Class | Optimization | Key Constraints |
+|------------|--------------|-----------------|
+| `first_name` | Addressability | Prefers vowel endings, avoids heavy clusters |
+| `last_name` | Durability | Prefers stop endings, avoids vowel endings |
+| `place_name` | Stability | Prefers clusters, allows longer names (2-4 syl) |
+
+**Feature Aggregation Rules** (syllable → name level):
+
+- **Onset** (`starts_with_*`): First syllable only
+- **Coda** (`ends_with_*`): Final syllable only
+- **Internal** (`contains_*`): OR across all syllables
+- **Nucleus** (`short_vowel`, `long_vowel`): Majority rule (>50%)
+
 ### File Naming Conventions
 
 All pipeline outputs use **prefixed naming** for clear provenance:
@@ -156,6 +211,25 @@ nltk_syllables_canonicalised.txt      # After fragment cleaning + normalization
 nltk_syllables_frequencies.json       # Frequency intelligence
 nltk_syllables_unique.txt             # Deduplicated inventory
 nltk_normalization_meta.txt           # Statistics report
+```
+
+#### **Selection Policy Layer Output**
+
+**Combiner Output** (written to `candidates/` subdirectory):
+
+```text
+pyphen_candidates_2syl.json           # 2-syllable candidates with aggregated features
+pyphen_candidates_3syl.json           # 3-syllable candidates
+pyphen_combiner_meta.txt              # Generation metadata (optional)
+```
+
+**Selector Output** (written to `selections/` subdirectory):
+
+```text
+pyphen_first_name_2syl.json           # First names from 2-syllable candidates
+pyphen_last_name_2syl.json            # Last names from 2-syllable candidates
+pyphen_place_name_3syl.json           # Place names from 3-syllable candidates
+pyphen_selector_meta.txt              # Selection metadata (optional)
 ```
 
 ### Key Differences: Pyphen vs NLTK
@@ -607,8 +681,17 @@ For detailed configuration, see [Development Guide](claude/development.md) and [
 pipeworks_name_generation/    # Core library code
 tests/                         # pytest test suite
 examples/                      # Usage examples
-data/                          # Pattern files (future: YAML configs)
+data/                          # Pattern files and policy configs
+  ├── name_classes.yml         # Name Class Matrix (Selection Policy)
+  ├── annotated/               # Sample annotated data
+  └── raw/                     # Sample raw corpora
 build_tools/                   # Build-time corpus analysis tools
+  ├── name_combiner/           # Candidate generation
+  ├── name_selector/           # Policy-based selection
+  ├── syllable_feature_annotator/  # 12-feature detection
+  ├── pyphen_syllable_extractor/   # Multi-language extraction
+  ├── nltk_syllable_extractor/     # Phonetic extraction
+  └── ...                      # Normalisers, analysis tools, TUIs
 claude/                        # Claude Code documentation (this structure)
 docs/                          # Sphinx documentation
 _working/                      # Local scratch workspace (not committed)
