@@ -7,9 +7,11 @@ import pytest
 
 from build_tools.name_selector.cli import (
     create_argument_parser,
+    extract_extractor_type,
     extract_prefix_and_syllables,
     main,
     parse_arguments,
+    resolve_candidates_path,
 )
 
 
@@ -159,6 +161,139 @@ class TestExtractPrefixAndSyllables:
             extract_prefix_and_syllables("pyphen_candidates_abcsyl.json")
 
 
+class TestExtractExtractorType:
+    """Test extractor type extraction from run directory name."""
+
+    def test_extracts_pyphen(self, tmp_path):
+        """Should extract pyphen from directory name."""
+        run_dir = tmp_path / "20260118_201318_pyphen"
+        run_dir.mkdir()
+        result = extract_extractor_type(run_dir)
+        assert result == "pyphen"
+
+    def test_extracts_nltk(self, tmp_path):
+        """Should extract nltk from directory name."""
+        run_dir = tmp_path / "20260118_201318_nltk"
+        run_dir.mkdir()
+        result = extract_extractor_type(run_dir)
+        assert result == "nltk"
+
+    def test_extracts_multi_word_extractor(self, tmp_path):
+        """Should extract multi-word extractor types."""
+        run_dir = tmp_path / "20260118_201318_custom_extractor"
+        run_dir.mkdir()
+        result = extract_extractor_type(run_dir)
+        assert result == "custom_extractor"
+
+    def test_returns_none_for_invalid_format(self, tmp_path):
+        """Should return None for directories without timestamp pattern."""
+        run_dir = tmp_path / "invalid_dir"
+        run_dir.mkdir()
+        result = extract_extractor_type(run_dir)
+        assert result is None
+
+    def test_returns_none_for_short_name(self, tmp_path):
+        """Should return None for directories with too few parts."""
+        run_dir = tmp_path / "short_name"
+        run_dir.mkdir()
+        result = extract_extractor_type(run_dir)
+        assert result is None
+
+
+class TestResolveCandidatesPath:
+    """Test candidates path resolution with auto-detection."""
+
+    def test_returns_existing_path(self, tmp_path):
+        """Should return the path as-is if it exists."""
+        run_dir = tmp_path / "20260118_201318_pyphen"
+        run_dir.mkdir()
+        candidates_dir = run_dir / "candidates"
+        candidates_dir.mkdir()
+        candidates_file = candidates_dir / "pyphen_candidates_2syl.json"
+        candidates_file.write_text("{}")
+
+        result = resolve_candidates_path(run_dir, Path("candidates/pyphen_candidates_2syl.json"))
+        assert result == candidates_file
+
+    def test_auto_corrects_wrong_prefix(self, tmp_path):
+        """Should auto-correct wrong prefix if correct file exists."""
+        run_dir = tmp_path / "20260118_201318_pyphen"
+        run_dir.mkdir()
+        candidates_dir = run_dir / "candidates"
+        candidates_dir.mkdir()
+        # Create the correct file
+        correct_file = candidates_dir / "pyphen_candidates_2syl.json"
+        correct_file.write_text("{}")
+
+        # Request with wrong prefix (nltk instead of pyphen)
+        result = resolve_candidates_path(run_dir, Path("candidates/nltk_candidates_2syl.json"))
+        assert result == correct_file
+
+    def test_finds_matching_file_by_syllable_count(self, tmp_path):
+        """Should find matching file by syllable count."""
+        run_dir = tmp_path / "20260118_201318_pyphen"
+        run_dir.mkdir()
+        candidates_dir = run_dir / "candidates"
+        candidates_dir.mkdir()
+        correct_file = candidates_dir / "pyphen_candidates_2syl.json"
+        correct_file.write_text("{}")
+
+        # Request a non-existent file with correct syllable count
+        result = resolve_candidates_path(run_dir, Path("candidates/wrong_candidates_2syl.json"))
+        assert result == correct_file
+
+    def test_returns_original_path_when_no_match(self, tmp_path):
+        """Should return original path when no matching file is found."""
+        run_dir = tmp_path / "20260118_201318_pyphen"
+        run_dir.mkdir()
+        candidates_dir = run_dir / "candidates"
+        candidates_dir.mkdir()
+
+        requested = Path("candidates/nonexistent.json")
+        result = resolve_candidates_path(run_dir, requested)
+        assert result == run_dir / requested
+
+    def test_returns_original_when_extractor_not_detected(self, tmp_path):
+        """Should return original path when extractor type cannot be detected."""
+        run_dir = tmp_path / "invalid"
+        run_dir.mkdir()
+
+        requested = Path("candidates/test.json")
+        result = resolve_candidates_path(run_dir, requested)
+        assert result == run_dir / requested
+
+    def test_skips_meta_files(self, tmp_path):
+        """Should skip meta files when searching for candidates."""
+        run_dir = tmp_path / "20260118_201318_pyphen"
+        run_dir.mkdir()
+        candidates_dir = run_dir / "candidates"
+        candidates_dir.mkdir()
+        # Create a meta file that should be skipped
+        meta_file = candidates_dir / "pyphen_candidates_2syl_meta.json"
+        meta_file.write_text("{}")
+        # Create the actual candidates file
+        correct_file = candidates_dir / "pyphen_candidates_2syl.json"
+        correct_file.write_text("{}")
+
+        result = resolve_candidates_path(run_dir, Path("candidates/nltk_candidates_2syl.json"))
+        assert result == correct_file
+
+    def test_glob_fallback_finds_matching_syllable_count(self, tmp_path):
+        """Should find file by glob search when direct path doesn't exist."""
+        run_dir = tmp_path / "20260118_201318_pyphen"
+        run_dir.mkdir()
+        candidates_dir = run_dir / "candidates"
+        candidates_dir.mkdir()
+        # Create file with correct extractor but different naming
+        correct_file = candidates_dir / "pyphen_candidates_2syl.json"
+        correct_file.write_text("{}")
+
+        # Request with completely different prefix (not just nltk vs pyphen)
+        # This triggers the glob fallback path
+        result = resolve_candidates_path(run_dir, Path("candidates/other_stuff_2syl.json"))
+        assert result == correct_file
+
+
 class TestMain:
     """Test main CLI entry point."""
 
@@ -269,6 +404,86 @@ class TestMain:
         )
 
         assert result == 1
+
+    def test_error_message_includes_hint_for_wrong_prefix(self, tmp_path, capsys):
+        """Should include helpful hint when candidates file has wrong prefix."""
+        # Create a run directory with extractor type in name
+        run_dir = tmp_path / "20260118_201318_pyphen"
+        run_dir.mkdir()
+
+        result = main(
+            [
+                "--run-dir",
+                str(run_dir),
+                "--candidates",
+                "candidates/nltk_candidates_2syl.json",
+                "--name-class",
+                "first_name",
+            ]
+        )
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "pyphen" in captured.err
+        assert "Hint" in captured.err
+
+    def test_error_message_without_extractor_type(self, tmp_path, capsys):
+        """Should show simple error when extractor type cannot be detected."""
+        # Create a run directory without extractor type in name
+        run_dir = tmp_path / "simple_dir"
+        run_dir.mkdir()
+
+        result = main(
+            [
+                "--run-dir",
+                str(run_dir),
+                "--candidates",
+                "candidates/test.json",
+                "--name-class",
+                "first_name",
+            ]
+        )
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err
+        assert "Hint" not in captured.err
+
+    def test_auto_correct_prefix_success(self, tmp_path, capsys):
+        """Should succeed when auto-correcting wrong prefix."""
+        # Create a run directory with extractor type
+        run_dir = tmp_path / "20260118_201318_pyphen"
+        run_dir.mkdir()
+        candidates_dir = run_dir / "candidates"
+        candidates_dir.mkdir()
+        # Create the correct file with pyphen prefix
+        candidates_file = candidates_dir / "pyphen_candidates_2syl.json"
+        candidates_file.write_text(json.dumps(make_candidates_data()))
+
+        policy_file = tmp_path / "policy.yml"
+        policy_file.write_text(make_policy_yaml())
+
+        # Request with wrong prefix (nltk instead of pyphen)
+        result = main(
+            [
+                "--run-dir",
+                str(run_dir),
+                "--candidates",
+                "candidates/nltk_candidates_2syl.json",
+                "--name-class",
+                "first_name",
+                "--policy-file",
+                str(policy_file),
+            ]
+        )
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Auto-corrected" in captured.out or "Found matching" in captured.out
+
+        # Output should use the correct prefix
+        output_file = run_dir / "selections" / "pyphen_first_name_2syl.json"
+        assert output_file.exists()
 
     def test_error_on_invalid_json(self, tmp_path):
         """Should return error code on invalid JSON."""
