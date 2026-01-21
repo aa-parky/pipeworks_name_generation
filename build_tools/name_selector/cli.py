@@ -100,6 +100,8 @@ Output:
         required=True,
         help=(
             "Path to candidates JSON file, relative to run-dir. "
+            "If the wrong prefix is specified (e.g., nltk_ for a pyphen run), "
+            "the correct file will be auto-detected. "
             "Example: candidates/pyphen_candidates_2syl.json"
         ),
     )
@@ -161,6 +163,85 @@ def parse_arguments(args: list[str] | None = None) -> argparse.Namespace:
     """
     parser = create_argument_parser()
     return parser.parse_args(args)
+
+
+def extract_extractor_type(run_dir: Path) -> str | None:
+    """
+    Extract extractor type from run directory name.
+
+    Parameters
+    ----------
+    run_dir : Path
+        Run directory like "_working/output/20260118_201318_pyphen"
+
+    Returns
+    -------
+    str | None
+        Extractor type (e.g., "pyphen", "nltk") or None if not found.
+    """
+    # Pattern: YYYYMMDD_HHMMSS_{extractor}
+    parts = run_dir.name.split("_")
+    if len(parts) >= 3:
+        return "_".join(parts[2:])  # Handle multi-word extractors
+    return None
+
+
+def resolve_candidates_path(run_dir: Path, candidates: Path) -> Path:
+    """
+    Resolve candidates path, auto-detecting prefix if needed.
+
+    If the specified path doesn't exist, tries to find a matching file
+    using the extractor type from the run directory name.
+
+    Parameters
+    ----------
+    run_dir : Path
+        Run directory path
+    candidates : Path
+        Candidates path (relative to run_dir)
+
+    Returns
+    -------
+    Path
+        Resolved candidates path (may be different from input if auto-detected)
+    """
+    candidates_path = run_dir / candidates
+    if candidates_path.exists():
+        return candidates_path
+
+    # Try to auto-detect the correct prefix
+    extractor_type = extract_extractor_type(run_dir)
+    if not extractor_type:
+        return candidates_path  # Return original, will fail with proper error
+
+    # Check if user specified wrong prefix - try the correct one
+    stem = candidates.stem  # e.g., "nltk_candidates_2syl"
+    parts = stem.split("_")
+
+    if len(parts) >= 3 and parts[1] == "candidates":
+        # User specified a prefix, try replacing it with the correct one
+        wrong_prefix = parts[0]
+        if wrong_prefix != extractor_type:
+            correct_filename = f"{extractor_type}_{'_'.join(parts[1:])}.json"
+            correct_path = run_dir / candidates.parent / correct_filename
+            if correct_path.exists():
+                print(f"Note: Auto-corrected prefix from '{wrong_prefix}' to '{extractor_type}'")
+                return correct_path
+
+    # Try to find any matching candidates file in the directory
+    candidates_dir = run_dir / candidates.parent
+    if candidates_dir.exists():
+        # Look for files matching *_candidates_*syl.json
+        for json_file in candidates_dir.glob(f"{extractor_type}_candidates_*.json"):
+            if "_meta" not in json_file.name:
+                # Check if syllable count matches (if specified in original)
+                if "syl" in stem:
+                    syl_part = stem.split("_")[-1]  # e.g., "2syl"
+                    if syl_part in json_file.name:
+                        print(f"Note: Found matching candidates file: {json_file.name}")
+                        return json_file
+
+    return candidates_path  # Return original, will fail with proper error
 
 
 def extract_prefix_and_syllables(candidates_filename: str) -> tuple[str, int]:
@@ -230,10 +311,22 @@ def main(args: list[str] | None = None) -> int:
         print(f"Error: Run directory not found: {run_dir}", file=sys.stderr)
         return 1
 
-    # Resolve candidates path
-    candidates_path = run_dir / parsed.candidates
+    # Resolve candidates path (with auto-detection)
+    candidates_path = resolve_candidates_path(run_dir, parsed.candidates)
     if not candidates_path.exists():
-        print(f"Error: Candidates file not found: {candidates_path}", file=sys.stderr)
+        # Provide helpful error message
+        extractor_type = extract_extractor_type(run_dir)
+        if extractor_type:
+            expected = f"candidates/{extractor_type}_candidates_Nsyl.json"
+            print(
+                f"Error: Candidates file not found: {run_dir / parsed.candidates}\n"
+                f"  Hint: This is a '{extractor_type}' run. Expected format: {expected}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"Error: Candidates file not found: {run_dir / parsed.candidates}", file=sys.stderr
+            )
         return 1
 
     # Load candidates
@@ -293,9 +386,9 @@ def main(args: list[str] | None = None) -> int:
     selected = select_names(candidates, policy, count=parsed.count, mode=parsed.mode)  # type: ignore[arg-type]
     print(f"Selected top {len(selected):,} names")
 
-    # Prepare output
+    # Prepare output - use resolved candidates_path (may have auto-corrected prefix)
     try:
-        prefix, syllables = extract_prefix_and_syllables(parsed.candidates.name)
+        prefix, syllables = extract_prefix_and_syllables(candidates_path.name)
     except ValueError as e:
         print(f"Warning: {e}. Using defaults.", file=sys.stderr)
         prefix = "unknown"
