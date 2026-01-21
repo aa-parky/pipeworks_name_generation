@@ -4,6 +4,36 @@ Fragment cleaning logic for NLTK syllable normalization.
 This module provides the FragmentCleaner class which handles reconstruction
 of phonetically coherent syllables from NLTK's over-segmented output by
 merging isolated single-letter fragments with their neighbors.
+
+---------------------------------------------------------------------------
+Design Note (for future maintainers, including future-me):
+
+This module is intentionally *strict and dumb*.
+
+Its responsibility is limited to:
+- Orthographic normalization
+- Structural reconstruction of broken fragments
+- Enforcing minimal length and basic phonetic viability
+
+It MUST NOT:
+- Remove fragments based on perceived meaning or “word-likeness”
+- Apply language-, culture-, or corpus-specific filtering
+- Decide whether a fragment is suitable as a name, place, or object
+- Encode aesthetic judgement or semantic assumptions
+
+Fragments such as common function words or corpus artefacts
+(e.g. "of", "the") are expected to survive this stage.
+
+Such cases are handled explicitly and *downstream* via:
+- Feature detection
+- Candidate aggregation
+- Name-class selection policies
+
+If a fragment appears questionable here, the correct response is:
+“preserve and annotate”, not “clean away”.
+
+This separation is deliberate and non-negotiable.
+---------------------------------------------------------------------------
 """
 
 VOWELS = set("aeiouy")

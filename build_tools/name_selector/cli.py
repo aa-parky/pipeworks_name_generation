@@ -342,6 +342,50 @@ def main(args: list[str] | None = None) -> int:
                 f"({features_summary} features)"
             )
 
+    # Write meta file
+    meta_output = {
+        "tool": "name_selector",
+        "version": "1.0.0",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "arguments": {
+            "run_dir": str(run_dir),
+            "candidates": str(parsed.candidates),
+            "name_class": parsed.name_class,
+            "policy_file": str(policy_path),
+            "count": parsed.count,
+            "mode": parsed.mode,
+        },
+        "input": {
+            "candidates_file": str(candidates_path),
+            "candidates_loaded": len(candidates),
+            "policy_file": str(policy_path),
+            "policy_name": parsed.name_class,
+            "policy_description": policy.description,
+        },
+        "output": {
+            "selections_file": str(output_path),
+            "selections_count": len(selected),
+        },
+        "statistics": {
+            "total_evaluated": stats["total_evaluated"],
+            "admitted": stats["admitted"],
+            "admitted_percentage": round(stats["admitted"] / stats["total_evaluated"] * 100, 2),
+            "rejected": stats["rejected"],
+            "rejection_reasons": stats["rejection_reasons"],
+            "score_distribution": stats["score_distribution"],
+            "mode": parsed.mode,
+            "source_prefix": prefix,
+            "syllable_count": syllables,
+        },
+    }
+
+    meta_filename = f"{prefix}_selector_meta.json"
+    meta_path = selections_dir / meta_filename
+    with open(meta_path, "w") as f:
+        json.dump(meta_output, f, indent=2)
+
+    print(f"Wrote meta to: {meta_path}")
+
     return 0
 
 
