@@ -278,7 +278,46 @@ def main(args: list[str] | None = None) -> int:
 
     # Summary stats
     unique_names = len(set(c["name"] for c in candidates))
-    print(f"Unique names: {unique_names:,} ({unique_names / len(candidates) * 100:.1f}%)")
+    unique_percentage = unique_names / len(candidates) * 100
+    print(f"Unique names: {unique_names:,} ({unique_percentage:.1f}%)")
+
+    # Write meta file
+    meta_output = {
+        "tool": "name_combiner",
+        "version": "1.0.0",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "arguments": {
+            "run_dir": str(run_dir),
+            "syllables": parsed.syllables,
+            "count": parsed.count,
+            "seed": parsed.seed,
+            "frequency_weight": parsed.frequency_weight,
+        },
+        "input": {
+            "annotated_file": str(annotated_path),
+            "syllables_loaded": len(annotated_data),
+        },
+        "output": {
+            "candidates_file": str(output_path),
+            "candidates_generated": len(candidates),
+            "unique_names": unique_names,
+            "unique_percentage": round(unique_percentage, 2),
+        },
+        "statistics": {
+            "source_run": run_dir.name,
+            "source_prefix": prefix,
+            "syllable_count": parsed.syllables,
+            "frequency_weight": parsed.frequency_weight,
+            "aggregation_rule": "majority",
+        },
+    }
+
+    meta_filename = f"{prefix}_combiner_meta.json"
+    meta_path = candidates_dir / meta_filename
+    with open(meta_path, "w") as f:
+        json.dump(meta_output, f, indent=2)
+
+    print(f"Wrote meta to: {meta_path}")
 
     return 0
 
