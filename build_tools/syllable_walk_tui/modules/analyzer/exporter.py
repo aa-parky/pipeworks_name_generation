@@ -9,6 +9,53 @@ Design Philosophy:
     - Mirror the screen display in text form
     - Include timestamps and corpus paths for provenance
     - Pure formatting functions (no side effects except final write)
+    - Percentages shown in parentheses for contextual understanding
+
+Percentage Display:
+    Exported metrics include percentages where they add meaningful context:
+
+    - **Length distribution**: Each length count shown as "length:count (pct%)"
+      where pct is the share of total inventory at that length.
+      Example: "2:120 (9.7%), 3:456 (37.0%)"
+
+    - **Hapax rate**: Syllables appearing exactly once, shown as "count (pct%)"
+      where pct is hapax_count / total_syllables * 100.
+      Example: "Hapax (freq=1):     456 (37.0%)"
+
+    - **Top 5 frequency**: Each top syllable shown as "syllable: count (pct%)"
+      where pct is count / total_occurrences * 100.
+      Example: "the: 500 (4.1%)"
+
+    These percentages help users quickly assess:
+    - Syllable shape preferences (length distribution)
+    - Vocabulary diversity vs. concentration (hapax rate)
+    - Zipfian distribution characteristics (top N coverage)
+
+Export Format:
+    CORPUS SHAPE METRICS EXPORT
+    Generated: YYYY-MM-DD HH:MM:SS
+
+    ==================================================
+    PATCH A
+    ==================================================
+    Corpus: corpus_name
+
+    INVENTORY
+      Total syllables:    1,234
+      Length dist:        2:120 (9.7%), 3:456 (37.0%), ...
+
+    FREQUENCY
+      Hapax (freq=1):     456 (37.0%)
+      Top 5 by frequency:
+        the: 500 (4.1%)
+        ...
+
+    [FEATURE SATURATION, TERRAIN sections follow]
+
+    ==================================================
+    PATCH B
+    ==================================================
+    [Same format as Patch A]
 """
 
 from __future__ import annotations
@@ -32,11 +79,24 @@ def format_inventory_metrics(inv: InventoryMetrics) -> str:
     """
     Format inventory metrics as text.
 
+    Displays raw counts and derived percentages for length distribution.
+    Percentages show each length's share of total inventory.
+
     Args:
         inv: Inventory metrics to format
 
     Returns:
-        Formatted text block
+        Formatted text block with length distribution percentages
+
+    Example output:
+        INVENTORY
+          Total syllables:    1,234
+          Length min:         2
+          Length max:         8
+          Length mean:        3.45
+          Length median:      3.0
+          Length std:         1.23
+          Length dist:        2:120 (9.7%), 3:456 (37.0%), 4:389 (31.5%), ...
     """
     lines = [
         "INVENTORY",
@@ -48,23 +108,56 @@ def format_inventory_metrics(inv: InventoryMetrics) -> str:
         f"  Length std:         {inv.length_std:.2f}",
     ]
 
-    # Length distribution
-    dist_parts = [f"{k}:{v}" for k, v in sorted(inv.length_distribution.items())]
+    # Length distribution with percentages
+    # Each count shown as both raw value and percentage of total inventory
+    dist_parts = [
+        f"{length}:{count} ({count / inv.total_count * 100:.1f}%)"
+        for length, count in sorted(inv.length_distribution.items())
+    ]
     lines.append(f"  Length dist:        {', '.join(dist_parts)}")
 
     return "\n".join(lines)
 
 
-def format_frequency_metrics(freq: FrequencyMetrics) -> str:
+def format_frequency_metrics(freq: FrequencyMetrics, total_syllables: int | None = None) -> str:
     """
     Format frequency metrics as text.
 
+    Displays raw frequency statistics and derived percentages for:
+    - Hapax rate: percentage of unique syllables appearing exactly once
+    - Top 5 coverage: percentage of total occurrences for most frequent syllables
+
     Args:
         freq: Frequency metrics to format
+        total_syllables: Total unique syllable count (from InventoryMetrics) for
+            computing hapax rate percentage. If None, percentage is omitted.
 
     Returns:
-        Formatted text block
+        Formatted text block with percentages in parentheses
+
+    Example output:
+        FREQUENCY
+          Total occurrences:  12,345
+          Freq min:           1
+          Freq max:           500
+          Freq mean:          10.00
+          Freq median:        5.0
+          Freq std:           25.50
+          Unique freq values: 234
+          Hapax (freq=1):     456 (37.0%)
+          ...
+          Top 5 by frequency:
+            the: 500 (4.1%)
+            and: 350 (2.8%)
     """
+    # Compute hapax rate if total_syllables provided
+    # Hapax rate shows vocabulary diversity - high rate = many unique rare syllables
+    if total_syllables and total_syllables > 0:
+        hapax_rate = freq.hapax_count / total_syllables * 100
+        hapax_line = f"  Hapax (freq=1):     {freq.hapax_count:,} ({hapax_rate:.1f}%)"
+    else:
+        hapax_line = f"  Hapax (freq=1):     {freq.hapax_count:,}"
+
     lines = [
         "FREQUENCY",
         f"  Total occurrences:  {freq.total_occurrences:,}",
@@ -74,7 +167,7 @@ def format_frequency_metrics(freq: FrequencyMetrics) -> str:
         f"  Freq median:        {freq.freq_median:.1f}",
         f"  Freq std:           {freq.freq_std:.2f}",
         f"  Unique freq values: {freq.unique_freq_count:,}",
-        f"  Hapax (freq=1):     {freq.hapax_count:,}",
+        hapax_line,
         "",
         "  Percentiles:",
         f"    P10={freq.percentile_10:,}  P25={freq.percentile_25:,}  "
@@ -85,8 +178,11 @@ def format_frequency_metrics(freq: FrequencyMetrics) -> str:
         "  Top 5 by frequency:",
     ]
 
+    # Top 5 with percentage of total occurrences
+    # Shows corpus concentration - how much the top syllables dominate
     for syl, count in freq.top_10[:5]:
-        lines.append(f"    {syl}: {count:,}")
+        pct_of_total = (count / freq.total_occurrences * 100) if freq.total_occurrences > 0 else 0.0
+        lines.append(f"    {syl}: {count:,} ({pct_of_total:.1f}%)")
 
     return "\n".join(lines)
 
@@ -219,13 +315,17 @@ def format_patch_metrics(
     """
     Format all metrics for a single patch.
 
+    Combines inventory, frequency, feature saturation, and terrain metrics
+    into a single formatted text block. Passes total_syllables from inventory
+    to frequency formatter for hapax rate percentage computation.
+
     Args:
         patch_name: "A" or "B"
         metrics: Corpus shape metrics, or None if not loaded
         corpus_path: Optional path to corpus directory
 
     Returns:
-        Formatted text block for entire patch
+        Formatted text block for entire patch with all metrics and percentages
     """
     header = f"PATCH {patch_name}"
     separator = "=" * 50
@@ -242,7 +342,8 @@ def format_patch_metrics(
 
     lines.append(format_inventory_metrics(metrics.inventory))
     lines.append("")
-    lines.append(format_frequency_metrics(metrics.frequency))
+    # Pass total_syllables to enable hapax rate percentage computation
+    lines.append(format_frequency_metrics(metrics.frequency, metrics.inventory.total_count))
     lines.append("")
     lines.append(format_feature_saturation(metrics.feature_saturation))
     lines.append("")
