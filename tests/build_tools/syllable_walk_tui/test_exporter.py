@@ -171,14 +171,15 @@ class TestFormatInventoryMetrics:
         assert "1.20" in result
 
     def test_length_distribution_formatting(self, sample_inventory_metrics):
-        """Test that length distribution is formatted correctly."""
+        """Test that length distribution is formatted with counts and percentages."""
         result = format_inventory_metrics(sample_inventory_metrics)
 
         assert "Length dist:" in result
-        # Distribution should be sorted by key
-        assert "2:100" in result
-        assert "3:200" in result
-        assert "8:10" in result
+        # Distribution should be sorted by key with percentages in parentheses
+        # 2:100/1000 = 10.0%, 3:200/1000 = 20.0%, 8:10/1000 = 1.0%
+        assert "2:100 (10.0%)" in result
+        assert "3:200 (20.0%)" in result
+        assert "8:10 (1.0%)" in result
 
     def test_empty_distribution(self):
         """Test formatting with empty distribution."""
@@ -217,6 +218,23 @@ class TestFormatFrequencyMetrics:
         assert "Hapax (freq=1):" in result
         assert "300" in result
 
+    def test_hapax_rate_with_total_syllables(self, sample_frequency_metrics):
+        """Test that hapax rate percentage is shown when total_syllables provided."""
+        # hapax_count=300, total_syllables=1000 -> 30.0%
+        result = format_frequency_metrics(sample_frequency_metrics, total_syllables=1000)
+
+        assert "Hapax (freq=1):" in result
+        assert "300 (30.0%)" in result
+
+    def test_hapax_rate_without_total_syllables(self, sample_frequency_metrics):
+        """Test that hapax rate percentage is omitted when total_syllables not provided."""
+        result = format_frequency_metrics(sample_frequency_metrics)
+
+        assert "Hapax (freq=1):" in result
+        assert "300" in result
+        # Should NOT have percentage without total_syllables
+        assert "(30.0%)" not in result
+
     def test_percentiles_formatting(self, sample_frequency_metrics):
         """Test that percentiles are formatted correctly."""
         result = format_frequency_metrics(sample_frequency_metrics)
@@ -230,15 +248,16 @@ class TestFormatFrequencyMetrics:
         assert "P99=" in result
 
     def test_top_frequencies_formatting(self, sample_frequency_metrics):
-        """Test that top 5 frequencies are shown."""
+        """Test that top 5 frequencies are shown with percentages."""
         result = format_frequency_metrics(sample_frequency_metrics)
 
         assert "Top 5 by frequency:" in result
-        # Only first 5 should be shown
+        # First 5 should be shown with percentages of total occurrences
+        # the: 5000/50000 = 10.0%, ing: 3000/50000 = 6.0%
         assert "the:" in result
-        assert "5,000" in result
+        assert "5,000 (10.0%)" in result
         assert "ing:" in result
-        assert "3,000" in result
+        assert "3,000 (6.0%)" in result
         # 6th entry should not be shown
         assert "with:" not in result
 

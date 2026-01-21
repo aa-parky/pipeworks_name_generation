@@ -8,6 +8,27 @@ Design Philosophy:
     - Raw numbers only, no value judgments
     - Observable facts about corpus structure
     - Users draw their own conclusions
+    - Percentages are objective facts, not interpretations
+
+Percentage Display Strategy:
+    Percentages are shown in parentheses after raw counts where they provide
+    meaningful context:
+
+    - Length distribution: Count with percentage of total inventory
+      e.g., "2:30 (20.0%)" means 30 syllables of length 2, which is 20% of all syllables
+
+    - Hapax rate: Count with percentage of total unique syllables
+      e.g., "Hapax (freq=1): 456 (37.0%)" means 456 syllables appear only once,
+      comprising 37% of the vocabulary
+
+    - Top 5 frequency: Count with percentage of total occurrences
+      e.g., "the: 500 (4.1%)" means the syllable "the" accounts for 4.1%
+      of all syllable occurrences in the corpus
+
+    These percentages help users quickly understand:
+    - How syllable lengths are distributed (length dist)
+    - Vocabulary diversity / "long tail" characteristics (hapax rate)
+    - Corpus concentration / Zipfian distribution (top N coverage)
 """
 
 from __future__ import annotations
@@ -613,7 +634,47 @@ class FeatureSaturationDisplay(Vertical):
 
 
 class MetricsDisplay(Vertical):
-    """Widget for displaying corpus shape metrics."""
+    """
+    Widget for displaying corpus shape metrics with percentages.
+
+    Renders inventory, frequency, feature saturation, and terrain metrics
+    for a single patch (A or B). Raw counts are displayed alongside derived
+    percentages in parentheses where they provide meaningful context.
+
+    Display Format:
+        PATCH {A|B}
+        ────────────────────────────────────────
+        INVENTORY
+          Total syllables:    1,234
+          Length min:         2
+          Length max:         8
+          Length mean:        3.45
+          Length median:      3.0
+          Length std:         1.23
+          Length dist:        2:120 (9.7%), 3:456 (37.0%), ...
+
+        FREQUENCY
+          Total occurrences:  12,345
+          ...
+          Hapax (freq=1):     456 (37.0%)
+          ...
+          Top 5 by frequency:
+            the: 500 (4.1%)
+            and: 350 (2.8%)
+            ...
+
+        FEATURE SATURATION      TERRAIN
+        (side-by-side display)
+
+    Percentage Semantics:
+        - Length dist %: Share of total inventory at each length
+        - Hapax %: Proportion of vocabulary that appears only once
+        - Top 5 %: Share of total occurrences for each top syllable
+
+    Attributes:
+        patch_name: Identifier "A" or "B" for the corpus patch
+        metrics: CorpusShapeMetrics instance or None if not loaded
+    """
 
     DEFAULT_CSS = """
     MetricsDisplay {
@@ -683,12 +744,20 @@ class MetricsDisplay(Vertical):
         yield Label(f"  Length median:      {inv.length_median:.1f}", classes="metrics-row")
         yield Label(f"  Length std:         {inv.length_std:.2f}", classes="metrics-row")
 
-        # Length distribution (compact)
+        # Length distribution with percentages
+        # Each count shown as both raw count and percentage of total inventory
         dist_str = "  Length dist:        "
-        dist_parts = [f"{k}:{v}" for k, v in sorted(inv.length_distribution.items())]
-        yield Label(dist_str + ", ".join(dist_parts[:6]), classes="metrics-row")
-        if len(dist_parts) > 6:
-            yield Label("                      " + ", ".join(dist_parts[6:]), classes="metrics-row")
+        dist_parts = [
+            f"{length}:{count} ({count / inv.total_count * 100:.1f}%)"
+            for length, count in sorted(inv.length_distribution.items())
+        ]
+        yield Label(dist_str + ", ".join(dist_parts[:4]), classes="metrics-row")
+        if len(dist_parts) > 4:
+            yield Label(
+                "                      " + ", ".join(dist_parts[4:8]), classes="metrics-row"
+            )
+        if len(dist_parts) > 8:
+            yield Label("                      " + ", ".join(dist_parts[8:]), classes="metrics-row")
 
         # === FREQUENCY METRICS ===
         freq = self.metrics.frequency
@@ -700,7 +769,14 @@ class MetricsDisplay(Vertical):
         yield Label(f"  Freq median:        {freq.freq_median:.1f}", classes="metrics-row")
         yield Label(f"  Freq std:           {freq.freq_std:.2f}", classes="metrics-row")
         yield Label(f"  Unique freq values: {freq.unique_freq_count:,}", classes="metrics-row")
-        yield Label(f"  Hapax (freq=1):     {freq.hapax_count:,}", classes="metrics-row")
+
+        # Hapax rate: percentage of unique syllables that appear exactly once
+        # High hapax rate indicates diverse vocabulary with many rare syllables
+        hapax_rate = (freq.hapax_count / inv.total_count * 100) if inv.total_count > 0 else 0.0
+        yield Label(
+            f"  Hapax (freq=1):     {freq.hapax_count:,} ({hapax_rate:.1f}%)",
+            classes="metrics-row",
+        )
 
         # Percentiles
         yield Label("  Percentiles:", classes="metrics-row")
@@ -715,10 +791,14 @@ class MetricsDisplay(Vertical):
             classes="metrics-row",
         )
 
-        # Top 5 syllables
+        # Top 5 syllables with percentage of total occurrences
+        # Shows corpus concentration - how much a few syllables dominate
         yield Label("  Top 5 by frequency:", classes="metrics-row")
         for syl, count in freq.top_10[:5]:
-            yield Label(f"    {syl}: {count:,}", classes="metrics-row")
+            pct_of_total = (
+                (count / freq.total_occurrences * 100) if freq.total_occurrences > 0 else 0.0
+            )
+            yield Label(f"    {syl}: {count:,} ({pct_of_total:.1f}%)", classes="metrics-row")
 
         # === FEATURE SATURATION + TERRAIN (side by side) ===
         with Horizontal(classes="feature-terrain-row"):
