@@ -12,8 +12,9 @@ import pytest
 from textual.widgets import Footer, Header, Label
 
 from build_tools.syllable_walk_tui.core import AppState, SyllableWalkerApp
-from build_tools.syllable_walk_tui.modules.analyzer import AnalysisScreen, StatsPanel
+from build_tools.syllable_walk_tui.modules.analyzer import AnalysisScreen
 from build_tools.syllable_walk_tui.modules.blender import BlendedWalkScreen
+from build_tools.syllable_walk_tui.modules.generator import CombinerPanel
 from build_tools.syllable_walk_tui.modules.oscillator import OscillatorPanel
 
 # Backward compatibility alias for tests
@@ -46,11 +47,16 @@ class TestSyllableWalkerApp:
             # Check patch panels exist in main view (always visible)
             patch_a = app.query_one("#patch-a", PatchPanel)
             patch_b = app.query_one("#patch-b", PatchPanel)
-            stats = app.query_one("#stats", StatsPanel)
 
             assert patch_a.patch_name == "A"
             assert patch_b.patch_name == "B"
-            assert stats is not None
+
+            # Check combiner panels exist (independent A and B)
+            combiner_a = app.query_one("#combiner-panel-a", CombinerPanel)
+            combiner_b = app.query_one("#combiner-panel-b", CombinerPanel)
+
+            assert combiner_a.patch_name == "A"
+            assert combiner_b.patch_name == "B"
 
             # Modal screens should not be visible initially
             assert len(app.query(BlendedWalkScreen)) == 0
@@ -252,31 +258,29 @@ class TestPatchPanel:
             assert pilot.app.query_one("#corpus-status-A")
 
 
-class TestStatsPanel:
-    """Tests for StatsPanel widget (walk output display)."""
+class TestCombinerPanel:
+    """Tests for CombinerPanel widget (name generation)."""
 
     @pytest.mark.asyncio
     async def test_compose_creates_widgets(self):
-        """Test that StatsPanel creates expected child widgets for walk output."""
+        """Test that CombinerPanel creates expected child widgets."""
         from textual.app import App
 
         class TestApp(App):
             def compose(self):
-                yield StatsPanel()
+                yield CombinerPanel(patch_name="A")
 
         async with TestApp().run_test() as pilot:
-            # Should have walk output labels
-            stats_labels = pilot.app.query(Label)
-            assert len(stats_labels) > 0
+            # Should have combiner labels
+            labels = pilot.app.query(Label)
+            assert len(labels) > 0
 
-            # Check for "PATCH A" and "PATCH B" headers (walk output display)
-            labels_text = [str(label.render()) for label in stats_labels]
-            assert any("PATCH A" in text for text in labels_text)
-            assert any("PATCH B" in text for text in labels_text)
+            # Check for "PATCH A NAME COMBINER" header
+            labels_text = [str(label.render()) for label in labels]
+            assert any("PATCH A NAME COMBINER" in text for text in labels_text)
 
-            # Check for walk output placeholders by ID
-            assert pilot.app.query_one("#walks-output-A")
-            assert pilot.app.query_one("#walks-output-B")
+            # Check for generate button
+            assert pilot.app.query_one("#generate-candidates-a")
 
 
 class TestCorpusSelectionFlow:
