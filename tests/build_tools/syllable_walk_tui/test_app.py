@@ -1768,3 +1768,170 @@ class TestSelectNamesButtons:
         async with app.run_test():
             button = app.query_one("#select-names-b")
             assert button is not None
+
+
+class TestExportTxtButtons:
+    """Tests for export TXT button handlers."""
+
+    @pytest.mark.asyncio
+    async def test_export_txt_a_button_exists(self):
+        """Test that export TXT button A exists."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            button = app.query_one("#export-txt-a")
+            assert button is not None
+
+    @pytest.mark.asyncio
+    async def test_export_txt_b_button_exists(self):
+        """Test that export TXT button B exists."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            button = app.query_one("#export-txt-b")
+            assert button is not None
+
+
+class TestExportToTxt:
+    """Tests for _export_to_txt method."""
+
+    @pytest.mark.asyncio
+    async def test_export_to_txt_requires_names(self):
+        """Test that _export_to_txt requires names to be available."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test() as pilot:
+            # No names in selector outputs
+            assert app.state.selector_a.outputs == []
+
+            # Try to export - should show notification
+            app._export_to_txt("A")
+            await pilot.pause()
+
+            # Should not crash
+            assert True
+
+    @pytest.mark.asyncio
+    async def test_export_to_txt_requires_output_path(self):
+        """Test that _export_to_txt requires last_output_path to be set."""
+        app = SyllableWalkerApp()
+
+        async with app.run_test() as pilot:
+            # Set names but no output path
+            app.state.selector_a.outputs = ["Kala", "Tana", "Naka"]
+            app.state.selector_a.last_output_path = None
+
+            # Try to export - should show notification
+            app._export_to_txt("A")
+            await pilot.pause()
+
+            # Should not crash
+            assert True
+
+    @pytest.mark.asyncio
+    async def test_export_to_txt_creates_file(self, tmp_path):
+        """Test that _export_to_txt creates TXT file with names."""
+        app = SyllableWalkerApp()
+
+        # Create a test selections directory
+        selections_dir = tmp_path / "selections"
+        selections_dir.mkdir()
+
+        # Create a fake JSON output path
+        json_path = selections_dir / "nltk_first_name_2syl.json"
+        json_path.write_text("{}")
+
+        async with app.run_test() as pilot:
+            # Set up selector state with names and output path
+            app.state.selector_a.outputs = ["Kala", "Tana", "Naka"]
+            app.state.selector_a.last_output_path = str(json_path)
+
+            # Export
+            app._export_to_txt("A")
+            await pilot.pause()
+
+            # Check TXT file was created
+            txt_path = selections_dir / "nltk_first_name_2syl.txt"
+            assert txt_path.exists()
+
+            # Check contents
+            content = txt_path.read_text()
+            assert "Kala\n" in content
+            assert "Tana\n" in content
+            assert "Naka\n" in content
+
+    @pytest.mark.asyncio
+    async def test_export_to_txt_for_patch_b(self, tmp_path):
+        """Test that _export_to_txt works for patch B."""
+        app = SyllableWalkerApp()
+
+        selections_dir = tmp_path / "selections"
+        selections_dir.mkdir()
+
+        json_path = selections_dir / "pyphen_last_name_3syl.json"
+        json_path.write_text("{}")
+
+        async with app.run_test() as pilot:
+            app.state.selector_b.outputs = ["Bakala", "Bitana"]
+            app.state.selector_b.last_output_path = str(json_path)
+
+            app._export_to_txt("B")
+            await pilot.pause()
+
+            txt_path = selections_dir / "pyphen_last_name_3syl.txt"
+            assert txt_path.exists()
+
+            content = txt_path.read_text()
+            assert "Bakala\n" in content
+            assert "Bitana\n" in content
+
+    @pytest.mark.asyncio
+    async def test_export_to_txt_one_name_per_line(self, tmp_path):
+        """Test that exported TXT has exactly one name per line."""
+        app = SyllableWalkerApp()
+
+        selections_dir = tmp_path / "selections"
+        selections_dir.mkdir()
+
+        json_path = selections_dir / "test_output.json"
+        json_path.write_text("{}")
+
+        async with app.run_test() as pilot:
+            names = ["Alpha", "Beta", "Gamma", "Delta"]
+            app.state.selector_a.outputs = names
+            app.state.selector_a.last_output_path = str(json_path)
+
+            app._export_to_txt("A")
+            await pilot.pause()
+
+            txt_path = selections_dir / "test_output.txt"
+            lines = txt_path.read_text().strip().split("\n")
+
+            assert len(lines) == 4
+            assert lines == names
+
+    @pytest.mark.asyncio
+    async def test_export_to_txt_preserves_name_order(self, tmp_path):
+        """Test that exported TXT preserves the order of names."""
+        app = SyllableWalkerApp()
+
+        selections_dir = tmp_path / "selections"
+        selections_dir.mkdir()
+
+        json_path = selections_dir / "test_order.json"
+        json_path.write_text("{}")
+
+        async with app.run_test() as pilot:
+            # Specific order
+            names = ["Zeta", "Alpha", "Mika", "Beta"]
+            app.state.selector_a.outputs = names
+            app.state.selector_a.last_output_path = str(json_path)
+
+            app._export_to_txt("A")
+            await pilot.pause()
+
+            txt_path = selections_dir / "test_order.txt"
+            lines = txt_path.read_text().strip().split("\n")
+
+            # Order should be preserved
+            assert lines == names
