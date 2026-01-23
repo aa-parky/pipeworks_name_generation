@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.6...pipeworks-name-generation-v0.5.7) (2026-01-23)
+
+
+### Documentation
+
+* **syllable_walk_tui:** Update documentation for refactored TUI with Render Screen ([#34](https://github.com/aa-parky/pipeworks_name_generation/issues/34)) ([f5d2dcb](https://github.com/aa-parky/pipeworks_name_generation/commit/f5d2dcb0763ca4174bd5c333a1e3706a906388b1))
+
 ## [0.5.6](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.5...pipeworks-name-generation-v0.5.6) (2026-01-23)
 
 
