@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.5...pipeworks-name-generation-v0.5.6) (2026-01-23)
+
+
+### Features
+
+* **name_renderer:** Add name rendering system with TUI integration ([#33](https://github.com/aa-parky/pipeworks_name_generation/issues/33)) ([331a58c](https://github.com/aa-parky/pipeworks_name_generation/commit/331a58cb7b01adaf910863228fb68ee70b0c54d9))
+* **syllable_walk_tui:** Add name ordering options and display improvements ([#29](https://github.com/aa-parky/pipeworks_name_generation/issues/29)) ([3448cae](https://github.com/aa-parky/pipeworks_name_generation/commit/3448caec6b038343fda072bc7b0b955fccce574b))
+* **syllable_walk_tui:** Add name_selector functionality to TUI ([#27](https://github.com/aa-parky/pipeworks_name_generation/issues/27)) ([d980f9a](https://github.com/aa-parky/pipeworks_name_generation/commit/d980f9aca991499d162c1eec934d2a65f2f75439))
+* **syllable_walk_tui:** Add TXT export for selected names ([#30](https://github.com/aa-parky/pipeworks_name_generation/issues/30)) ([2460005](https://github.com/aa-parky/pipeworks_name_generation/commit/24600050ceb9dfcfd99187f59d2ab940e3847e45))
+
+
+### Internal Changes
+
+* **syllable_walk_tui:** Modularize app.py into focused modules ([#31](https://github.com/aa-parky/pipeworks_name_generation/issues/31)) ([73a126d](https://github.com/aa-parky/pipeworks_name_generation/commit/73a126dd4db668f9856009b086bc7f50b9262461))
+
 ## [0.5.5](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.4...pipeworks-name-generation-v0.5.5) (2026-01-22)
 
 
