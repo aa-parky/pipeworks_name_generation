@@ -4,6 +4,8 @@ Tests for nltk_syllable_extractor CLI.
 Tests for module imports and shared CLI utilities integration.
 """
 
+from unittest.mock import patch
+
 
 class TestCliImports:
     """Test that CLI module imports correctly."""
@@ -64,3 +66,70 @@ class TestArgumentParser:
         # Verify key arguments are present
         assert "--source" in option_strings or "-s" in option_strings
         assert "--output" in option_strings or "-o" in option_strings
+
+
+class TestMainFunction:
+    """Test main() function mode selection."""
+
+    def test_main_calls_batch_mode_with_file_arg(self):
+        """Test main() calls run_batch when --file is provided."""
+        with patch("sys.argv", ["prog", "--file", "test.txt"]):
+            # Patch at the batch module level since import happens inside main()
+            with patch("build_tools.nltk_syllable_extractor.batch.run_batch") as mock_batch:
+                from build_tools.nltk_syllable_extractor.cli import main
+
+                # Avoid calling real batch mode
+                mock_batch.side_effect = SystemExit(0)
+
+                try:
+                    main()
+                except SystemExit:
+                    pass
+
+                mock_batch.assert_called_once()
+
+    def test_main_calls_batch_mode_with_files_arg(self):
+        """Test main() calls run_batch when --files is provided."""
+        with patch("sys.argv", ["prog", "--files", "test1.txt", "test2.txt"]):
+            with patch("build_tools.nltk_syllable_extractor.batch.run_batch") as mock_batch:
+                from build_tools.nltk_syllable_extractor.cli import main
+
+                mock_batch.side_effect = SystemExit(0)
+
+                try:
+                    main()
+                except SystemExit:
+                    pass
+
+                mock_batch.assert_called_once()
+
+    def test_main_calls_batch_mode_with_source_arg(self):
+        """Test main() calls run_batch when --source is provided."""
+        with patch("sys.argv", ["prog", "--source", "/path/to/dir"]):
+            with patch("build_tools.nltk_syllable_extractor.batch.run_batch") as mock_batch:
+                from build_tools.nltk_syllable_extractor.cli import main
+
+                mock_batch.side_effect = SystemExit(0)
+
+                try:
+                    main()
+                except SystemExit:
+                    pass
+
+                mock_batch.assert_called_once()
+
+    def test_main_calls_interactive_mode_with_no_args(self):
+        """Test main() calls run_interactive when no batch args provided."""
+        with patch("sys.argv", ["prog"]):
+            # Patch at the interactive module level since import happens inside main()
+            with patch(
+                "build_tools.nltk_syllable_extractor.interactive.run_interactive"
+            ) as mock_interactive:
+                from build_tools.nltk_syllable_extractor.cli import main
+
+                # Make interactive mode return immediately
+                mock_interactive.return_value = None
+
+                main()
+
+                mock_interactive.assert_called_once()
