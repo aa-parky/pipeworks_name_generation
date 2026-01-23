@@ -228,6 +228,21 @@ class TestComputeMetricsForPatch:
             assert result is not None
             mock_compute.assert_called_once()
 
+    def test_returns_none_when_computation_fails(self):
+        """Test that None is returned when computation raises an exception."""
+        mock_patch = MagicMock()
+        mock_patch.syllables = ["a", "b"]
+        mock_patch.frequencies = {"a": 1, "b": 2}
+        mock_patch.annotated_data = [{"text": "a"}]
+
+        with patch(
+            "build_tools.syllable_walk_tui.services.metrics.compute_corpus_shape_metrics"
+        ) as mock_compute:
+            mock_compute.side_effect = Exception("Computation failed")
+            result = compute_metrics_for_patch(mock_patch)
+
+            assert result is None
+
 
 class TestGetInitialBrowseDir:
     """Tests for get_initial_browse_dir function."""
@@ -260,8 +275,8 @@ class TestGetInitialBrowseDir:
 
         assert result == last_browse
 
-    def test_returns_home_as_fallback(self, tmp_path):
-        """Test that home directory is used as fallback."""
+    def test_returns_home_as_fallback(self):
+        """Test that home directory is used as fallback when _working/output doesn't exist."""
         mock_app = MagicMock()
         mock_patch = MagicMock()
         mock_patch.corpus_dir = None
@@ -270,7 +285,7 @@ class TestGetInitialBrowseDir:
 
         result = get_initial_browse_dir(mock_app, "A")
 
-        # Result should be a Path
+        # Result should be a Path (either _working/output or home directory)
         assert isinstance(result, Path)
 
 

@@ -108,6 +108,17 @@ class TestUpdateCorpusStatusLoading:
         call_arg = mock_label.update.call_args[0][0]
         assert "nltk_syllables" in call_arg
 
+    def test_handles_query_exception_gracefully(self, capsys):
+        """Test that exceptions are caught and logged."""
+        mock_app = MagicMock()
+        mock_app.query_one.side_effect = Exception("Widget not found")
+
+        # Should not raise
+        ui_updates.update_corpus_status_loading(mock_app, "A", "corpus_info", "pyphen")
+
+        captured = capsys.readouterr()
+        assert "Warning" in captured.out
+
 
 class TestUpdateCorpusStatusReady:
     """Tests for update_corpus_status_ready function."""
@@ -176,6 +187,19 @@ class TestUpdateCorpusStatusReady:
         call_arg = mock_label.update.call_args[0][0]
         assert "annotated.json" in call_arg
 
+    def test_handles_query_exception_gracefully(self, capsys):
+        """Test that exceptions are caught and logged."""
+        mock_app = MagicMock()
+        mock_app.query_one.side_effect = Exception("Widget not found")
+
+        # Should not raise
+        ui_updates.update_corpus_status_ready(
+            mock_app, "A", "corpus_info", "pyphen", 500, "sqlite", 150
+        )
+
+        captured = capsys.readouterr()
+        assert "Warning" in captured.out
+
 
 class TestUpdateCorpusStatusError:
     """Tests for update_corpus_status_error function."""
@@ -223,6 +247,16 @@ class TestUpdateCorpusStatusError:
         mock_label.remove_class.assert_called_once_with("corpus-status-valid")
         mock_label.add_class.assert_called_once_with("corpus-status")
 
+    def test_handles_query_exception_silently(self):
+        """Test that exceptions are caught silently."""
+        mock_app = MagicMock()
+        mock_app.query_one.side_effect = Exception("Widget not found")
+
+        # Should not raise - exception is silently ignored
+        ui_updates.update_corpus_status_error(mock_app, "A", "corpus_info", "pyphen", "error")
+
+        # No assertions needed - just verifying no exception is raised
+
 
 class TestUpdateCorpusStatusNotAnnotated:
     """Tests for update_corpus_status_not_annotated function."""
@@ -242,6 +276,16 @@ class TestUpdateCorpusStatusNotAnnotated:
 
         call_arg = mock_label.update.call_args[0][0]
         assert "Run syllable_feature_annotator" in call_arg
+
+    def test_handles_query_exception_silently(self):
+        """Test that exceptions are caught silently."""
+        mock_app = MagicMock()
+        mock_app.query_one.side_effect = Exception("Widget not found")
+
+        # Should not raise - exception is silently ignored
+        ui_updates.update_corpus_status_not_annotated(mock_app, "A", "corpus_info", "pyphen")
+
+        # No assertions needed - just verifying no exception is raised
 
 
 class TestUpdateCenterCorpusLabel:
