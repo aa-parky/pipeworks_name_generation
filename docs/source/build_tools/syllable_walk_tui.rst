@@ -24,11 +24,14 @@ rather than generating specific outputs.
 **Key Features:**
 
 - Side-by-side patch configuration (dual oscillator comparison)
-- Center panel walk output display with corpus provenance
-- Configurable walk count per patch (default 2, "less is more")
-- Modal screens for blended walks and analysis (v/a keys)
+- Four-column layout: Oscillator A | Generator A | Generator B | Oscillator B
+- Name Combiner integration for candidate generation (mirrors CLI)
+- Name Selector integration for policy-based filtering (mirrors CLI)
+- Render Screen for styled name display with title/upper/lower case
+- TXT export for selected names
+- Modal screens for blended walks, analysis, render, and database (v/a/r/d keys)
 - Keyboard-first navigation with Tab and arrow keys
-- Real-time phonetic exploration with profile selection
+- Real-time phonetic exploration with profile selection (clerical, dialect, goblin, ritual, custom)
 - Quick corpus selection with number keys (1/2)
 - Corpus directory selection and browsing
 - Live syllable walk generation
@@ -57,13 +60,20 @@ configurations, similar to comparing two oscillator settings in a synthesizer.
 Side-by-Side Patch Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The TUI displays two patches (A and B) simultaneously, enabling direct comparison
-of different phonetic exploration strategies:
+The TUI uses a four-column layout for efficient dual-patch workflow:
+
+- **Column 1**: Oscillator Panel A (walk parameters, profiles, corpus selection)
+- **Column 2**: Generator Panel A (Combiner + Selector for name generation)
+- **Column 3**: Generator Panel B (Combiner + Selector for name generation)
+- **Column 4**: Oscillator Panel B (walk parameters, profiles, corpus selection)
+
+This layout enables:
 
 - Configure Patch A with conservative parameters (e.g., "clerical" profile)
 - Configure Patch B with chaotic parameters (e.g., "goblin" profile)
-- Generate walks for both to compare phonetic behaviors
-- Swap configurations between patches for rapid experimentation
+- Generate candidates and select names independently for each patch
+- Compare naming results using the Render Screen (r key)
+- Export selected names to TXT files for external use
 
 Keyboard-First Navigation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -104,27 +114,20 @@ Output Format
 Interactive Exploration
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-The Syllable Walker TUI is an interactive exploration tool and does not produce
-file-based outputs. Instead, it enables real-time phonetic exploration through
-the terminal interface.
+The Syllable Walker TUI is primarily an interactive exploration tool. Walk outputs
+are displayed in the Oscillator Panels (outer columns), while name generation
+outputs are produced by the Generator Panels (middle columns) and stored to disk.
 
-**Center Panel Walk Display:**
+**Walk Display (Oscillator Panels):**
 
-Generated walks are displayed in the center panel with corpus provenance:
+Generated walks are displayed in each Oscillator Panel with corpus provenance:
 
 .. code-block:: text
 
-    PATCH A
     20260110_115453_pyphen (Pyphen)
     ────────────────────
     ka → ki → ta → ka → ti → ko
     ma → mi → na → ni → mo → no
-
-    PATCH B
-    20260110_115601_nltk (NLTK)
-    ────────────────────
-    bra → kla → gal → sta → pla → tra
-    clem → gism → lents → rovn → pus → cha
 
 **Walk Count:**
 
@@ -132,10 +135,13 @@ Each patch has a configurable walk count (default 2, range 1-20). The "less is m
 approach encourages focused exploration - start with 2 walks to *feel* the phonetic
 space before generating more.
 
-**Future Enhancement:**
+**Name Generation Outputs (Generator Panels):**
 
-Export functionality for walks may be added in future versions, allowing users
-to save interesting walk sequences for later analysis or use in name generation patterns.
+Unlike walks, name generation produces file outputs:
+
+- **Candidates**: Stored in ``{run_dir}/candidates/{prefix}_candidates_{N}syl.json``
+- **Selections**: Stored in ``{run_dir}/selections/{prefix}_{class}_{N}syl.json``
+- **TXT Export**: Plain text exports alongside JSON (one name per line)
 
 Integration Guide
 -----------------
@@ -172,14 +178,30 @@ annotating your syllable corpus:
 1. **Compare Extractors:** Load pyphen and NLTK corpora side-by-side to see
    phonetic connectivity differences between extraction methods
 
-2. **Profile Exploration:** Test all four walk profiles (clerical, dialect,
-   goblin, ritual) with the same starting syllable to understand their behaviors
+2. **Profile Exploration:** Test all five walk profiles (clerical, dialect,
+   goblin, ritual, custom) with the same starting syllable to understand their behaviors
 
 3. **Parameter Tuning:** Adjust temperature, frequency weight, and max flips
    in real-time to discover optimal settings for your use case
 
 4. **Corpus Discovery:** Browse corpus directories to explore available
    annotated datasets and their characteristics
+
+5. **Name Generation Workflow:**
+
+   a. Select corpus for Patch A (press ``1``)
+   b. Configure Combiner: syllable count, candidate count, seed
+   c. Generate candidates (Combiner Panel → Generate button)
+   d. Configure Selector: name class (first_name, last_name, etc.), count, mode
+   e. Select names (Selector Panel → Select button)
+   f. View styled results (press ``r`` for Render Screen)
+   g. Export to TXT if needed (Selector Panel → Export button)
+
+6. **Combined Name Generation:**
+
+   - Use Patch A with ``first_name`` policy
+   - Use Patch B with ``last_name`` policy
+   - Open Render Screen (``r``) and press ``c`` to view combined full names
 
 Advanced Topics
 ---------------
@@ -216,18 +238,46 @@ Keyboard Shortcuts
      - Open Blended Walk modal screen
    * - ``a``
      - Open Analysis modal screen
-   * - ``w``
-     - Open Terrain Weights editor (from Analysis screen)
-   * - ``e``
-     - Export metrics to text file (from Analysis screen)
    * - ``r``
-     - Refresh pole exemplars (from Analysis screen)
+     - Open Render Screen (styled name display)
    * - ``d``
      - Open Database Viewer for Patch A
    * - ``D`` (Shift+d)
      - Open Database Viewer for Patch B
    * - ``Esc``
      - Close current modal screen
+
+**Within Analysis Screen:**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Key
+     - Action
+   * - ``w``
+     - Open Terrain Weights editor
+   * - ``e``
+     - Export metrics to text file
+   * - ``r``
+     - Refresh pole exemplars
+   * - ``q`` / ``Esc``
+     - Close Analysis screen
+
+**Within Render Screen:**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Key
+     - Action
+   * - ``s``
+     - Cycle through rendering styles (title/UPPER/lower)
+   * - ``c``
+     - Toggle combined name view (Patch A + Patch B)
+   * - ``q`` / ``Esc``
+     - Close Render screen
 
 **Navigation:**
 
@@ -286,6 +336,41 @@ navigation in the corpus browser and intuitive shortcuts for common actions.
 
 **Note:** Keybindings use Textual's priority system, so global shortcuts like
 ``q`` and ``v`` work even when controls have focus.
+
+Name Generation Panels
+~~~~~~~~~~~~~~~~~~~~~~
+
+The middle two columns of the TUI contain the Generator Panels, which integrate
+the ``name_combiner`` and ``name_selector`` CLI tools into an interactive workflow.
+
+**Combiner Panel:**
+
+Controls for generating name candidates from the loaded corpus:
+
+- **Syllables**: Number of syllables per name (2-4)
+- **Count**: Number of candidates to generate (default 10,000)
+- **Seed**: Random seed for reproducibility
+- **Frequency Weight**: Bias toward common (positive) or rare (negative) syllables
+
+The Combiner mirrors the ``name_combiner`` CLI tool exactly, producing candidates
+stored in the run directory's ``candidates/`` subdirectory.
+
+**Selector Panel:**
+
+Controls for filtering candidates using the Name Class Matrix policies:
+
+- **Name Class**: Policy to apply (first_name, last_name, place_name, etc.)
+- **Count**: Maximum names to select (default 100)
+- **Mode**: hard (strict) or soft (lenient) filtering
+- **Order**: alphabetical or random output ordering
+
+The Selector mirrors the ``name_selector`` CLI tool exactly, producing selections
+stored in the run directory's ``selections/`` subdirectory.
+
+**Export to TXT:**
+
+After selecting names, the Export button saves the selection to a plain text file
+(one name per line) alongside the JSON output.
 
 Corpus Directory Selection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -478,6 +563,55 @@ can behave identically if their local neighbourhoods are similar.
 The metrics help you understand why walks feel different across corpora,
 even with identical parameters.
 
+Render Screen
+~~~~~~~~~~~~~
+
+Press ``r`` to open the Render Screen, which displays selected names from both
+patches with proper styling for human evaluation. This transforms raw lowercase
+names (data) into styled, human-readable formats (names).
+
+**Design Philosophy:**
+
+- Presentation only - does not modify underlying data
+- Shows names in context for human evaluation
+- "orma" in a list is data; "Orma" in context is a name
+
+**Features:**
+
+- **Side-by-side display** showing Patch A and Patch B selections
+- **Style cycling** (press ``s``): Title case (default) → UPPER → lower
+- **Combined name view** (press ``c``): Pairs Patch A first names with Patch B last names
+- **Name class labels** showing which policy was used for each selection
+
+**Example Display:**
+
+.. code-block:: text
+
+   NAME RENDERER
+   Style: Title Case | Press 's' to change, 'c' to combine
+
+   ┌─ PATCH A ────────────┐  ┌─ PATCH B ────────────┐
+   │ Name Class: first_name│  │ Name Class: last_name │
+   │ Orma                  │  │ Krandel               │
+   │ Velith                │  │ Thornak               │
+   │ Amiko                 │  │ Brenwick              │
+   └──────────────────────┘  └───────────────────────┘
+
+   ┌─ COMBINED NAMES (A + B) ─┐
+   │ Orma Krandel             │
+   │ Velith Thornak           │
+   │ Amiko Brenwick           │
+   └──────────────────────────┘
+
+**Render Screen Keybindings:**
+
+- ``s``: Cycle through styles (title → UPPER → lower → title)
+- ``c``: Toggle combined name view panel
+- ``Esc`` / ``q``: Close and return to main view
+
+The Render Screen integrates with the ``build_tools.name_renderer`` module for
+consistent name styling across the pipeline.
+
 Database Viewer
 ~~~~~~~~~~~~~~~
 
@@ -627,7 +761,10 @@ This is a build-time exploration tool - not used during runtime name generation.
 **Related Documentation:**
 
 - :doc:`syllable_walk` - Command-line syllable walker (batch generation)
+- :doc:`syllable_walk_web` - Web interface for browsing selections
 - :doc:`syllable_feature_annotator` - Generates input data with phonetic features
+- :doc:`name_combiner` - Generates name candidates (used by Generator Panel)
+- :doc:`name_selector` - Selects names by policy (used by Generator Panel)
 - :doc:`corpus_db_viewer` - Interactive TUI for viewing corpus database records
 - :doc:`pyphen_syllable_normaliser` - Prepares pyphen syllable corpus
 - :doc:`nltk_syllable_normaliser` - Prepares NLTK syllable corpus

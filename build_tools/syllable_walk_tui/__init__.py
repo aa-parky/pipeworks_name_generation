@@ -5,10 +5,14 @@ An interactive terminal UI for exploring phonetic space through the Syllable Wal
 system. This is a **build-time tool only** - not used during runtime name generation.
 
 Features:
+- Four-column layout: Oscillator A | Generator A | Generator B | Oscillator B
 - Side-by-side patch configuration (dual oscillator comparison)
-- Center panel walk output with corpus provenance
-- Configurable walk count per patch (default 2, "less is more")
-- Profile-based parameter presets (clerical, dialect, goblin, ritual)
+- Name Combiner integration for candidate generation (mirrors CLI)
+- Name Selector integration for policy-based filtering (mirrors CLI)
+- Render Screen for styled name display (title/UPPER/lower case)
+- TXT export for selected names
+- Profile-based parameter presets (clerical, dialect, goblin, ritual, custom)
+- Modal screens: Blended Walk (v), Analysis (a), Render (r), Database (d/D)
 - Quick corpus selection with number keys (1/2)
 - Keyboard-first navigation with Tab and vi-style keys
 - Real-time phonetic exploration

@@ -20,13 +20,13 @@ of the name generator.
 
 ```bash
 # Start the web server (auto-discovers port starting at 8000)
-python -m build_tools.syllable_walk --web
+python -m build_tools.syllable_walk_web
 
 # Specify exact port
-python -m build_tools.syllable_walk --web --port 9000
+python -m build_tools.syllable_walk_web --port 9000
 
 # Verbose mode
-python -m build_tools.syllable_walk --web --verbose
+python -m build_tools.syllable_walk_web --verbose
 ```
 
 The web interface provides:
@@ -173,7 +173,7 @@ The server auto-discovers available ports:
 
 ```bash
 # Auto-discover starting at 8000
-python -m build_tools.syllable_walk --web
+python -m build_tools.syllable_walk_web
 # Output: Server running at http://localhost:8000
 
 # If 8000 is in use, tries 8001, 8002, etc.
@@ -183,7 +183,7 @@ python -m build_tools.syllable_walk --web
 To use a specific port:
 
 ```bash
-python -m build_tools.syllable_walk --web --port 9000
+python -m build_tools.syllable_walk_web --port 9000
 # Fails with error if port 9000 is unavailable
 ```
 
