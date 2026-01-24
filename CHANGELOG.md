@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.11](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.10...pipeworks-name-generation-v0.5.11) (2026-01-24)
+
+
+### Internal Changes
+
+* **build_tools:** Standardize CLI interfaces across all build tools ([#43](https://github.com/aa-parky/pipeworks_name_generation/issues/43)) ([9116398](https://github.com/aa-parky/pipeworks_name_generation/commit/91163981a1e11b338cce6b19a0bd3739e6d6419f))
+* Modernize type hints using PEP 604 and PEP 585 syntax ([#44](https://github.com/aa-parky/pipeworks_name_generation/issues/44)) ([f4333c1](https://github.com/aa-parky/pipeworks_name_generation/commit/f4333c134eac412488a546dd9f7ed53c1f4a6cbe))
+
 ## [0.5.10](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.9...pipeworks-name-generation-v0.5.10) (2026-01-23)
 
 
