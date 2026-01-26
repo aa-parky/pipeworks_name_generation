@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.12](https://github.com/pipe-works/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.11...pipeworks-name-generation-v0.5.12) (2026-01-26)
+
+
+### Features
+
+* **ci:** add workflow_dispatch trigger to release-please ([#50](https://github.com/pipe-works/pipeworks_name_generation/issues/50)) ([012adda](https://github.com/pipe-works/pipeworks_name_generation/commit/012addae689be216c560966f6d6dc4d020ca7bee))
+
+
+### Fixes
+
+* **tests:** Add pilot.pause() to fix flaky Windows TUI test ([#47](https://github.com/pipe-works/pipeworks_name_generation/issues/47)) ([4c1d5c8](https://github.com/pipe-works/pipeworks_name_generation/commit/4c1d5c85833642b5c3dc5fba3207221258b28b7a))
+
+
+### Internal Changes
+
+* migrate to reusable workflows ([#49](https://github.com/pipe-works/pipeworks_name_generation/issues/49)) ([e53f2af](https://github.com/pipe-works/pipeworks_name_generation/commit/e53f2af384db518e2e248c354b184bd0f1d13a21))
+
 ## [0.5.11](https://github.com/aa-parky/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.10...pipeworks-name-generation-v0.5.11) (2026-01-24)
 
 
