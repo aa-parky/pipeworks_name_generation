@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.13](https://github.com/pipe-works/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.12...pipeworks-name-generation-v0.5.13) (2026-01-27)
+
+
+### Fixes
+
+* **packaging:** exclude __pycache__ from distribution ([#52](https://github.com/pipe-works/pipeworks_name_generation/issues/52)) ([f370ec9](https://github.com/pipe-works/pipeworks_name_generation/commit/f370ec9c8551a40e4bbd35cd920a7e25e32f428d))
+
 ## [0.5.12](https://github.com/pipe-works/pipeworks_name_generation/compare/pipeworks-name-generation-v0.5.11...pipeworks-name-generation-v0.5.12) (2026-01-26)
 
 
