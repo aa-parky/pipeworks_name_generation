@@ -266,8 +266,12 @@ class SyllableWalkerApp(App):
 
         comb = self.state.combiner_a if patch_name == "A" else self.state.combiner_b
 
+        if comb.syllable_mode == "all":
+            message = f"Generating {comb.count:,} candidates for all syllable counts (2-4)..."
+        else:
+            message = f"Generating {comb.count:,} {comb.syllables}-syllable candidates..."
         self.notify(
-            f"Generating {comb.count:,} {comb.syllables}-syllable candidates...",
+            message,
             timeout=2,
             severity="information",
         )
@@ -282,6 +286,8 @@ class SyllableWalkerApp(App):
         # Update state
         comb.outputs = [c["name"] for c in result.candidates[:10]]  # Preview first 10
         comb.last_output_path = str(result.output_path)
+        comb.last_unique_count = result.meta_output.get("output", {}).get("unique_names")
+        comb.last_candidates_files = result.meta_output.get("output", {}).get("candidates_files")
 
         # Update panel
         actions.update_combiner_panel(self, patch_name, result.meta_output)
@@ -308,6 +314,16 @@ class SyllableWalkerApp(App):
 
         selector = self.state.selector_a if patch_name == "A" else self.state.selector_b
         combiner = self.state.combiner_a if patch_name == "A" else self.state.combiner_b
+
+        # Apply count mode (manual vs unique)
+        if selector.count_mode == "unique":
+            if combiner.last_unique_count is None:
+                self.notify(
+                    "Unique count unavailable. Run Generate Candidates first.",
+                    severity="warning",
+                )
+                return
+            selector.count = combiner.last_unique_count
 
         self.notify(
             f"Selecting {selector.count} {selector.name_class} names...",

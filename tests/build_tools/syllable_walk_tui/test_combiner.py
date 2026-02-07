@@ -138,6 +138,34 @@ class TestCombinerEventHandlers:
             assert app.state.combiner_a.syllables == 3
             assert app.state.combiner_b.syllables == 4
 
+    @pytest.mark.asyncio
+    async def test_combiner_mode_all_updates_state_a(self):
+        """Test that combiner mode all updates combiner_a state."""
+        from build_tools.tui_common.controls import RadioOption
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            event = RadioOption.Selected(option_name="all", widget_id="combiner-mode-all-a")
+            app.on_profile_selected(event)
+
+            assert app.state.combiner_a.syllable_mode == "all"
+
+    @pytest.mark.asyncio
+    async def test_combiner_syllables_change_switches_to_exact(self):
+        """Changing syllables should switch combiner mode back to exact."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            app.state.combiner_a.syllable_mode = "all"
+
+            event = IntSpinner.Changed(value=3, widget_id="combiner-syllables-a")
+            app.on_int_spinner_changed(event)
+
+            assert app.state.combiner_a.syllable_mode == "exact"
+
 
 class TestRunCombiner:
     """Tests for _run_combiner method."""
@@ -272,6 +300,72 @@ class TestRunCombiner:
 
             # Check that combiner state was updated
             assert app.state.combiner_a.last_output_path is not None
+
+    @pytest.mark.asyncio
+    async def test_run_combiner_all_mode_creates_combined_file(self, tmp_path):
+        """Test that all-mode combiner creates combined candidates file."""
+        app = SyllableWalkerApp()
+
+        corpus_dir = tmp_path / "test_corpus_all"
+        corpus_dir.mkdir()
+
+        annotated_data = [
+            {
+                "syllable": "ka",
+                "frequency": 100,
+                "features": {
+                    "starts_with_vowel": False,
+                    "starts_with_cluster": False,
+                    "starts_with_heavy_cluster": False,
+                    "contains_plosive": True,
+                    "contains_fricative": False,
+                    "contains_liquid": False,
+                    "contains_nasal": False,
+                    "short_vowel": True,
+                    "long_vowel": False,
+                    "ends_with_vowel": True,
+                    "ends_with_nasal": False,
+                    "ends_with_stop": False,
+                },
+            },
+            {
+                "syllable": "ta",
+                "frequency": 90,
+                "features": {
+                    "starts_with_vowel": False,
+                    "starts_with_cluster": False,
+                    "starts_with_heavy_cluster": False,
+                    "contains_plosive": True,
+                    "contains_fricative": False,
+                    "contains_liquid": False,
+                    "contains_nasal": False,
+                    "short_vowel": True,
+                    "long_vowel": False,
+                    "ends_with_vowel": True,
+                    "ends_with_nasal": False,
+                    "ends_with_stop": False,
+                },
+            },
+        ]
+
+        async with app.run_test() as pilot:
+            app.state.patch_a.corpus_dir = corpus_dir
+            app.state.patch_a.corpus_type = "NLTK"
+            app.state.patch_a.syllables = ["ka", "ta"]
+            app.state.patch_a.frequencies = {"ka": 100, "ta": 90}
+            app.state.patch_a.annotated_data = annotated_data
+
+            app.state.combiner_a.syllable_mode = "all"
+            app.state.combiner_a.count = 20
+            app.state.combiner_a.seed = 7
+
+            app._run_combiner("A")
+            await pilot.pause(0.5)
+
+            combined_file = corpus_dir / "candidates" / "nltk_candidates_all.json"
+            assert combined_file.exists()
+            assert app.state.combiner_a.last_candidates_files is not None
+            assert set(app.state.combiner_a.last_candidates_files.keys()) == {"2", "3", "4"}
 
     @pytest.mark.asyncio
     async def test_run_combiner_for_patch_b(self, tmp_path):

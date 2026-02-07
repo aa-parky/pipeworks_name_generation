@@ -121,7 +121,7 @@ class SelectorPanel(Static):
     }
 
     SelectorPanel .mode-options {
-        layout: horizontal;
+        layout: vertical;
         height: auto;
     }
 
@@ -131,8 +131,19 @@ class SelectorPanel(Static):
     }
 
     SelectorPanel .order-options {
-        layout: horizontal;
+        layout: vertical;
         height: auto;
+    }
+
+    SelectorPanel .count-mode-label {
+        margin-top: 1;
+        margin-bottom: 0;
+    }
+
+    SelectorPanel .count-mode-options {
+        layout: vertical;
+        height: auto;
+        margin-bottom: 1;
     }
 
     SelectorPanel .names-scroll {
@@ -179,6 +190,22 @@ class SelectorPanel(Static):
             step=10,
             id=f"selector-count-{self.patch_name.lower()}",
         )
+
+        # Count mode (manual vs unique)
+        yield Label("Count Mode:", classes="count-mode-label")
+        with Static(classes="count-mode-options"):
+            yield RadioOption(
+                "manual",
+                "Use count value",
+                is_selected=True,
+                id=f"selector-count-mode-manual-{self.patch_name.lower()}",
+            )
+            yield RadioOption(
+                "unique",
+                "Use unique candidates",
+                is_selected=False,
+                id=f"selector-count-mode-unique-{self.patch_name.lower()}",
+            )
 
         # --mode: Evaluation mode (hard/soft)
         yield Label("Mode:", classes="mode-label")

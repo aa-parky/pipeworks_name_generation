@@ -112,6 +112,35 @@ class TestSelectorEventHandlers:
             assert app.state.selector_a.count == 50
             assert app.state.selector_b.count == 200
 
+    @pytest.mark.asyncio
+    async def test_selector_count_mode_unique_updates_state_a(self):
+        """Test that selector count mode unique updates selector_a state."""
+        from build_tools.tui_common.controls import RadioOption
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            event = RadioOption.Selected(
+                option_name="unique", widget_id="selector-count-mode-unique-a"
+            )
+            app.on_profile_selected(event)
+
+            assert app.state.selector_a.count_mode == "unique"
+
+    @pytest.mark.asyncio
+    async def test_selector_count_change_switches_to_manual(self):
+        """Changing count should switch selector count mode back to manual."""
+        from build_tools.tui_common.controls import IntSpinner
+
+        app = SyllableWalkerApp()
+
+        async with app.run_test():
+            app.state.selector_a.count_mode = "unique"
+            event = IntSpinner.Changed(value=120, widget_id="selector-count-a")
+            app.on_int_spinner_changed(event)
+
+            assert app.state.selector_a.count_mode == "manual"
+
 
 class TestSelectorOrderEventHandlers:
     """Tests for selector order-related event handlers."""
@@ -375,6 +404,155 @@ class TestRunSelector:
 
             # Check that selector state was updated
             assert app.state.selector_a.last_output_path is not None
+
+    @pytest.mark.asyncio
+    async def test_run_selector_uses_unique_count(self, tmp_path):
+        """Selector should use combiner unique count when count_mode=unique."""
+        app = SyllableWalkerApp()
+
+        corpus_dir = tmp_path / "test_corpus_unique"
+        corpus_dir.mkdir()
+
+        annotated_data = [
+            {
+                "syllable": "ka",
+                "frequency": 100,
+                "features": {
+                    "starts_with_vowel": False,
+                    "starts_with_cluster": False,
+                    "starts_with_heavy_cluster": False,
+                    "contains_plosive": True,
+                    "contains_fricative": False,
+                    "contains_liquid": False,
+                    "contains_nasal": False,
+                    "short_vowel": True,
+                    "long_vowel": False,
+                    "ends_with_vowel": True,
+                    "ends_with_nasal": False,
+                    "ends_with_stop": False,
+                },
+            },
+            {
+                "syllable": "ta",
+                "frequency": 80,
+                "features": {
+                    "starts_with_vowel": False,
+                    "starts_with_cluster": False,
+                    "starts_with_heavy_cluster": False,
+                    "contains_plosive": True,
+                    "contains_fricative": False,
+                    "contains_liquid": False,
+                    "contains_nasal": False,
+                    "short_vowel": True,
+                    "long_vowel": False,
+                    "ends_with_vowel": True,
+                    "ends_with_nasal": False,
+                    "ends_with_stop": False,
+                },
+            },
+        ]
+
+        async with app.run_test() as pilot:
+            app.state.patch_a.corpus_dir = corpus_dir
+            app.state.patch_a.corpus_type = "NLTK"
+            app.state.patch_a.syllables = ["ka", "ta"]
+            app.state.patch_a.frequencies = {"ka": 100, "ta": 80}
+            app.state.patch_a.annotated_data = annotated_data
+
+            app.state.combiner_a.syllables = 2
+            app.state.combiner_a.count = 20
+            app.state.combiner_a.seed = 42
+
+            app._run_combiner("A")
+            await pilot.pause(0.5)
+
+            # Enable unique count mode
+            app.state.selector_a.name_class = "first_name"
+            app.state.selector_a.count_mode = "unique"
+
+            app._run_selector("A")
+            await pilot.pause(0.5)
+
+            assert app.state.selector_a.count == app.state.combiner_a.last_unique_count
+
+    @pytest.mark.asyncio
+    async def test_run_selector_all_mode_creates_per_syllable_files(self, tmp_path):
+        """All-mode selector should create per-syllable JSON and TXT files."""
+        app = SyllableWalkerApp()
+
+        corpus_dir = tmp_path / "test_corpus_all_selector"
+        corpus_dir.mkdir()
+
+        annotated_data = [
+            {
+                "syllable": "ka",
+                "frequency": 100,
+                "features": {
+                    "starts_with_vowel": False,
+                    "starts_with_cluster": False,
+                    "starts_with_heavy_cluster": False,
+                    "contains_plosive": True,
+                    "contains_fricative": False,
+                    "contains_liquid": False,
+                    "contains_nasal": False,
+                    "short_vowel": True,
+                    "long_vowel": False,
+                    "ends_with_vowel": True,
+                    "ends_with_nasal": False,
+                    "ends_with_stop": False,
+                },
+            },
+            {
+                "syllable": "ta",
+                "frequency": 80,
+                "features": {
+                    "starts_with_vowel": False,
+                    "starts_with_cluster": False,
+                    "starts_with_heavy_cluster": False,
+                    "contains_plosive": True,
+                    "contains_fricative": False,
+                    "contains_liquid": False,
+                    "contains_nasal": False,
+                    "short_vowel": True,
+                    "long_vowel": False,
+                    "ends_with_vowel": True,
+                    "ends_with_nasal": False,
+                    "ends_with_stop": False,
+                },
+            },
+        ]
+
+        async with app.run_test() as pilot:
+            app.state.patch_a.corpus_dir = corpus_dir
+            app.state.patch_a.corpus_type = "NLTK"
+            app.state.patch_a.syllables = ["ka", "ta"]
+            app.state.patch_a.frequencies = {"ka": 100, "ta": 80}
+            app.state.patch_a.annotated_data = annotated_data
+
+            app.state.combiner_a.syllable_mode = "all"
+            app.state.combiner_a.count = 15
+            app.state.combiner_a.seed = 99
+
+            app._run_combiner("A")
+            await pilot.pause(0.5)
+
+            app.state.selector_a.name_class = "first_name"
+            app.state.selector_a.count = 20
+            app._run_selector("A")
+            await pilot.pause(0.5)
+
+            selections_dir = corpus_dir / "selections"
+            assert (selections_dir / "nltk_first_name_2syl.json").exists()
+            assert (selections_dir / "nltk_first_name_3syl.json").exists()
+            assert (selections_dir / "nltk_first_name_4syl.json").exists()
+
+            assert (selections_dir / "nltk_first_name_2syl.txt").exists()
+            assert (selections_dir / "nltk_first_name_3syl.txt").exists()
+            assert (selections_dir / "nltk_first_name_4syl.txt").exists()
+
+            # Combined all output remains
+            assert (selections_dir / "nltk_first_name_all.json").exists()
+            assert (selections_dir / "nltk_first_name_all.txt").exists()
 
 
 class TestSelectNamesButtons:
