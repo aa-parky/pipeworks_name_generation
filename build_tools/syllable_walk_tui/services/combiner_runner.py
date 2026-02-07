@@ -44,6 +44,13 @@ def run_combiner(
 
     Output is written to: <run-dir>/candidates/{prefix}_candidates_{N}syl.json
 
+    TUI Extension:
+        When combiner_state.syllable_mode == "all", this function also:
+        - Generates candidates for 2, 3, and 4 syllables
+        - Writes per-length files: {prefix}_candidates_2syl.json, etc.
+        - Writes a combined file: {prefix}_candidates_all.json
+        - Returns combined candidates in the result
+
     Args:
         patch: PatchState with corpus data
         combiner_state: CombinerState with generation parameters
@@ -77,44 +84,90 @@ def run_combiner(
         )
 
     try:
-        # === Generate candidates (mirrors CLI main()) ===
-        candidates = combine_syllables(
-            annotated_data=patch.annotated_data,
-            syllable_count=comb.syllables,
-            count=comb.count,
-            seed=comb.seed,
-            frequency_weight=comb.frequency_weight,
-        )
-
         # === Prepare output directory (mirrors CLI) ===
         candidates_dir = run_dir / "candidates"
         candidates_dir.mkdir(parents=True, exist_ok=True)
 
-        output_filename = f"{prefix}_candidates_{comb.syllables}syl.json"
-        output_path = candidates_dir / output_filename
+        # Determine syllable counts
+        if comb.syllable_mode == "all":
+            syllable_counts = [2, 3, 4]
+        else:
+            syllable_counts = [comb.syllables]
 
-        # === Build output structure (mirrors CLI) ===
-        output = {
-            "metadata": {
-                "source_run": run_dir.name,
-                "source_annotated": f"{prefix}_syllables_annotated.json",
-                "syllable_count": comb.syllables,
-                "total_candidates": len(candidates),
-                "seed": comb.seed,
-                "frequency_weight": comb.frequency_weight,
-                "aggregation_rule": "majority",
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-            },
-            "candidates": candidates,
-        }
+        all_candidates: list[dict] = []
+        per_syllable_files: dict[str, str] = {}
+        per_syllable_counts: dict[str, int] = {}
+        last_output_path: Path | None = None
 
-        # === Write output (mirrors CLI) ===
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(output, f, indent=2)
+        # === Generate candidates per syllable count ===
+        for syllable_count in syllable_counts:
+            candidates = combine_syllables(
+                annotated_data=patch.annotated_data,
+                syllable_count=syllable_count,
+                count=comb.count,
+                seed=comb.seed,
+                frequency_weight=comb.frequency_weight,
+            )
 
-        # === Build meta file (mirrors CLI exactly) ===
-        unique_names = len(set(c["name"] for c in candidates))
-        unique_percentage = unique_names / len(candidates) * 100 if candidates else 0
+            output_filename = f"{prefix}_candidates_{syllable_count}syl.json"
+            output_path = candidates_dir / output_filename
+
+            output = {
+                "metadata": {
+                    "source_run": run_dir.name,
+                    "source_annotated": f"{prefix}_syllables_annotated.json",
+                    "syllable_count": syllable_count,
+                    "total_candidates": len(candidates),
+                    "seed": comb.seed,
+                    "frequency_weight": comb.frequency_weight,
+                    "aggregation_rule": "majority",
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                "candidates": candidates,
+            }
+
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(output, f, indent=2)
+
+            per_syllable_files[str(syllable_count)] = str(output_path)
+            per_syllable_counts[str(syllable_count)] = len(candidates)
+            last_output_path = output_path
+
+            if comb.syllable_mode == "all":
+                all_candidates.extend(candidates)
+            else:
+                all_candidates = candidates
+
+        # === If "all", also write combined file ===
+        if comb.syllable_mode == "all":
+            combined_filename = f"{prefix}_candidates_all.json"
+            combined_path = candidates_dir / combined_filename
+            combined_output = {
+                "metadata": {
+                    "source_run": run_dir.name,
+                    "source_annotated": f"{prefix}_syllables_annotated.json",
+                    "syllable_count": "all",
+                    "syllable_counts": syllable_counts,
+                    "total_candidates": len(all_candidates),
+                    "seed": comb.seed,
+                    "frequency_weight": comb.frequency_weight,
+                    "aggregation_rule": "majority",
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "candidates_files": per_syllable_files,
+                },
+                "candidates": all_candidates,
+            }
+            with open(combined_path, "w", encoding="utf-8") as f:
+                json.dump(combined_output, f, indent=2)
+            last_output_path = combined_path
+
+        if last_output_path is None:
+            raise ValueError("No candidates were generated")
+
+        # === Build meta file (mirrors CLI with TUI extensions) ===
+        unique_names = len(set(c["name"] for c in all_candidates))
+        unique_percentage = unique_names / len(all_candidates) * 100 if all_candidates else 0
+        syllables_arg = "all" if comb.syllable_mode == "all" else comb.syllables
 
         meta_output = {
             "tool": "name_combiner",
@@ -122,27 +175,30 @@ def run_combiner(
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "arguments": {
                 "run_dir": str(run_dir),
-                "syllables": comb.syllables,
+                "syllables": syllables_arg,
+                "syllable_mode": comb.syllable_mode,
+                "syllable_counts": syllable_counts,
                 "count": comb.count,
                 "seed": comb.seed,
                 "frequency_weight": comb.frequency_weight,
             },
             "output": {
-                "candidates_file": str(output_path),
-                "candidates_generated": len(candidates),
+                "candidates_file": str(last_output_path),
+                "candidates_generated": len(all_candidates),
                 "unique_names": unique_names,
                 "unique_percentage": round(unique_percentage, 2),
+                "candidates_files": per_syllable_files,
+                "per_syllable_counts": per_syllable_counts,
             },
         }
 
-        # === Write meta file ===
         meta_path = candidates_dir / f"{prefix}_combiner_meta.json"
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta_output, f, indent=2)
 
         return CombinerResult(
-            candidates=candidates,
-            output_path=output_path,
+            candidates=all_candidates,
+            output_path=last_output_path,
             meta_output=meta_output,
             error=None,
         )

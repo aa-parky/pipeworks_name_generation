@@ -18,6 +18,7 @@ from build_tools.syllable_walk.profiles import WALK_PROFILES
 
 if TYPE_CHECKING:
     from build_tools.syllable_walk_tui.core.app import SyllableWalkerApp
+    from build_tools.syllable_walk_tui.modules.generator import CombinerState, SelectorState
     from build_tools.syllable_walk_tui.modules.oscillator import PatchState
 
 
@@ -81,9 +82,14 @@ def handle_int_spinner_changed(
     """
     # Check for combiner panel widgets first (pattern: combiner-<param>-<patch>)
     if widget_id.startswith("combiner-"):
-        comb = app.state.combiner_a if widget_id.endswith("-a") else app.state.combiner_b
+        is_patch_a = widget_id.endswith("-a")
+        comb = app.state.combiner_a if is_patch_a else app.state.combiner_b
+        patch_name = "A" if is_patch_a else "B"
         if "syllables" in widget_id:
             comb.syllables = value
+            # Changing the exact syllable count implies "exact" mode.
+            if comb.syllable_mode != "exact":
+                set_combiner_mode(app, patch_name, comb, "exact")
         elif "count" in widget_id:
             comb.count = value
         return
@@ -93,6 +99,9 @@ def handle_int_spinner_changed(
         sel = app.state.selector_a if widget_id.endswith("-a") else app.state.selector_b
         if "count" in widget_id:
             sel.count = value
+            # Manual change implies manual count mode
+            if sel.count_mode != "manual":
+                set_selector_count_mode(app, widget_id[-1].upper(), sel, "manual")
         return
 
     # Parse widget ID to determine patch and parameter
@@ -257,6 +266,114 @@ def handle_selector_mode_selected(
         pass
 
 
+def set_selector_count_mode(
+    app: "SyllableWalkerApp",
+    patch_name: str,
+    selector: "SelectorState",
+    mode: str,
+) -> None:
+    """
+    Set selector count mode and update radio button UI.
+
+    Args:
+        app: Application instance for widget access
+        patch_name: "A" or "B"
+        selector: SelectorState instance
+        mode: "manual" or "unique"
+    """
+    from build_tools.syllable_walk_tui.controls import ProfileOption
+
+    selector.count_mode = mode  # type: ignore[assignment]
+
+    try:
+        manual_option = app.query_one(
+            f"#selector-count-mode-manual-{patch_name.lower()}", ProfileOption
+        )
+        unique_option = app.query_one(
+            f"#selector-count-mode-unique-{patch_name.lower()}", ProfileOption
+        )
+
+        if mode == "manual":
+            manual_option.set_selected(True)
+            unique_option.set_selected(False)
+        else:
+            manual_option.set_selected(False)
+            unique_option.set_selected(True)
+    except Exception:  # nosec B110 - Widget may not be mounted yet
+        pass
+
+
+def handle_selector_count_mode_selected(
+    app: "SyllableWalkerApp",
+    widget_id: str,
+    mode: str,
+) -> None:
+    """
+    Handle selector count mode radio selection.
+
+    Args:
+        app: Application instance for state and widget access
+        widget_id: Widget ID like "selector-count-mode-unique-a"
+        mode: Mode name ("manual" or "unique")
+    """
+    patch_name = widget_id[-1].upper()
+    selector = app.state.selector_a if patch_name == "A" else app.state.selector_b
+    set_selector_count_mode(app, patch_name, selector, mode)
+
+
+def set_combiner_mode(
+    app: "SyllableWalkerApp",
+    patch_name: str,
+    combiner: "CombinerState",
+    mode: str,
+) -> None:
+    """
+    Set combiner syllable mode and update radio button UI.
+
+    Args:
+        app: Application instance for widget access
+        patch_name: "A" or "B"
+        combiner: CombinerState instance
+        mode: "exact" or "all"
+    """
+    from build_tools.syllable_walk_tui.controls import ProfileOption
+
+    # Update state
+    combiner.syllable_mode = mode  # type: ignore[assignment]
+
+    # Update UI
+    try:
+        exact_option = app.query_one(f"#combiner-mode-exact-{patch_name.lower()}", ProfileOption)
+        all_option = app.query_one(f"#combiner-mode-all-{patch_name.lower()}", ProfileOption)
+
+        if mode == "exact":
+            exact_option.set_selected(True)
+            all_option.set_selected(False)
+        else:
+            exact_option.set_selected(False)
+            all_option.set_selected(True)
+    except Exception:  # nosec B110 - Widget may not be mounted yet
+        pass
+
+
+def handle_combiner_mode_selected(
+    app: "SyllableWalkerApp",
+    widget_id: str,
+    mode: str,
+) -> None:
+    """
+    Handle combiner mode radio option selection.
+
+    Args:
+        app: Application instance for state and widget access
+        widget_id: Widget ID like "combiner-mode-all-a"
+        mode: Mode name ("exact" or "all")
+    """
+    patch_name = widget_id[-1].upper()
+    comb = app.state.combiner_a if patch_name == "A" else app.state.combiner_b
+    set_combiner_mode(app, patch_name, comb, mode)
+
+
 def handle_selector_order_selected(
     app: "SyllableWalkerApp",
     widget_id: str,
@@ -333,6 +450,16 @@ def handle_profile_selected(
     # Handle selector mode options (selector-mode-hard-a, selector-mode-soft-b)
     if widget_id.startswith("selector-mode-"):
         handle_selector_mode_selected(app, widget_id, profile_name)
+        return
+
+    # Handle combiner mode options (combiner-mode-exact-a, combiner-mode-all-b)
+    if widget_id.startswith("combiner-mode-"):
+        handle_combiner_mode_selected(app, widget_id, profile_name)
+        return
+
+    # Handle selector count mode options (selector-count-mode-manual-a, selector-count-mode-unique-b)
+    if widget_id.startswith("selector-count-mode-"):
+        handle_selector_count_mode_selected(app, widget_id, profile_name)
         return
 
     # Handle selector order options (selector-order-random-a, selector-order-alphabetical-b)

@@ -2,11 +2,12 @@
 State management for name generation modules.
 
 This module provides dataclasses for managing name combiner and selector
-configuration. The states mirror the exact CLI options from the tools.
+configuration. The states mirror the exact CLI options from the tools,
+with small TUI-only extensions where needed.
 
 CombinerState CLI Options:
     --run-dir          → source_patch (A or B, uses patch's corpus_dir)
-    --syllables        → syllables (2, 3, or 4)
+    --syllables        → syllables (2, 3, or 4) [TUI also supports "all" via syllable_mode]
     --count            → count (default: 10000)
     --seed             → seed (None = random)
     --frequency-weight → frequency_weight (0.0-1.0, default: 1.0)
@@ -42,7 +43,9 @@ class CombinerState:
         source_patch: Which patch's corpus to use ("A" or "B")
                       Maps to CLI --run-dir (uses patch's corpus_dir)
         syllables: Number of syllables per name (2, 3, or 4)
-                   Maps to CLI --syllables
+                   Maps to CLI --syllables when syllable_mode="exact"
+        syllable_mode: "exact" for a single syllable count, "all" to generate
+                       2/3/4 syllable candidates in one run (TUI-only)
         count: Number of candidates to generate
                Maps to CLI --count (default: 10000)
         seed: RNG seed for deterministic output (None = random)
@@ -52,6 +55,8 @@ class CombinerState:
 
         outputs: List of generated candidate names (for display)
         last_output_path: Path where candidates were written
+        last_unique_count: Unique name count from last combiner run
+        last_candidates_files: Mapping of syllable count to candidates file path
     """
 
     # Source selection - which patch's corpus to use
@@ -61,6 +66,10 @@ class CombinerState:
     # Number of syllables per candidate name (2, 3, or 4)
     # Maps to CLI --syllables (required, choices=[2, 3, 4])
     syllables: int = 2
+
+    # TUI-only mode for syllable count selection
+    # "exact" uses the syllables value above, "all" generates 2/3/4
+    syllable_mode: Literal["exact", "all"] = "exact"
 
     # Number of candidates to generate
     # Maps to CLI --count (default: 10000)
@@ -78,6 +87,8 @@ class CombinerState:
     # Output storage (for display in TUI)
     outputs: list[str] = field(default_factory=list)
     last_output_path: str | None = None
+    last_unique_count: int | None = None
+    last_candidates_files: dict[str, str] | None = None
 
 
 # Available name classes from data/name_classes.yml
@@ -104,6 +115,8 @@ class SelectorState:
                     Maps to CLI --name-class (required)
         count: Maximum number of names to output
                Maps to CLI --count (default: 100)
+        count_mode: "manual" to use count value, "unique" to use the
+                    combiner's unique candidate count (TUI-only)
         mode: Evaluation mode - "hard" rejects, "soft" penalizes
               Maps to CLI --mode (default: "hard")
         order: Ordering for names with equal scores
@@ -123,6 +136,10 @@ class SelectorState:
     # Maximum number of names to output
     # Maps to CLI --count (default: 100)
     count: int = 100
+
+    # TUI-only: how count is determined
+    # "manual" uses count above, "unique" uses combiner unique count
+    count_mode: Literal["manual", "unique"] = "manual"
 
     # Evaluation mode
     # "hard" = reject candidates with discouraged features

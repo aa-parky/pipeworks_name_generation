@@ -17,7 +17,7 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.widgets import Button, Label, Static
 
-from build_tools.syllable_walk_tui.controls import FloatSlider, IntSpinner, SeedInput
+from build_tools.syllable_walk_tui.controls import FloatSlider, IntSpinner, RadioOption, SeedInput
 
 
 class CombinerPanel(Static):
@@ -48,6 +48,23 @@ class CombinerPanel(Static):
     }
 
     CombinerPanel .control-row {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    CombinerPanel .mode-label {
+        margin-top: 1;
+        margin-bottom: 0;
+    }
+
+    CombinerPanel .mode-options {
+        layout: horizontal;
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    CombinerPanel .combiner-mode-options {
+        layout: vertical;
         height: auto;
         margin-bottom: 1;
     }
@@ -112,15 +129,31 @@ class CombinerPanel(Static):
         """Create combiner panel layout matching CLI options."""
         yield Label(f"PATCH {self.patch_name} NAME COMBINER", classes="panel-header")
 
-        # --syllables: 2, 3, or 4
+        # --syllables: 2, 3, or 4 (exact mode)
         yield IntSpinner(
-            "Syllables",
+            "Syllables (Exact)",
             value=2,
             min_val=2,
             max_val=4,
             step=1,
             id=f"combiner-syllables-{self.patch_name.lower()}",
         )
+
+        # Syllable mode (exact vs all)
+        yield Label("Syllable Mode:", classes="mode-label")
+        with Static(classes="combiner-mode-options"):
+            yield RadioOption(
+                "exact",
+                "Use selected count",
+                is_selected=True,
+                id=f"combiner-mode-exact-{self.patch_name.lower()}",
+            )
+            yield RadioOption(
+                "all",
+                "Generate 2-4",
+                is_selected=False,
+                id=f"combiner-mode-all-{self.patch_name.lower()}",
+            )
 
         # --count: Number of candidates (default: 10000)
         yield IntSpinner(
@@ -181,7 +214,11 @@ class CombinerPanel(Static):
 
             # Arguments section
             args = meta.get("arguments", {})
-            lines.append(f"Syllables: {args.get('syllables', '?')}")
+            syllables_arg = args.get("syllables", "?")
+            if syllables_arg == "all":
+                lines.append("Syllables: all (2-4)")
+            else:
+                lines.append(f"Syllables: {syllables_arg}")
             lines.append(f"Count: {args.get('count', '?'):,}")
             lines.append(f"Seed: {args.get('seed', '?')}")
             lines.append(f"Freq Weight: {args.get('frequency_weight', '?')}")

@@ -26,6 +26,11 @@ class TestCombinerStateDefaults:
         state = CombinerState()
         assert state.syllables == 2
 
+    def test_default_syllable_mode(self) -> None:
+        """Default syllable_mode is exact."""
+        state = CombinerState()
+        assert state.syllable_mode == "exact"
+
     def test_default_count(self) -> None:
         """Default count is 10000 (matches CLI --count default)."""
         state = CombinerState()
@@ -50,6 +55,11 @@ class TestCombinerStateDefaults:
         """Default last_output_path is None."""
         state = CombinerState()
         assert state.last_output_path is None
+
+    def test_default_last_candidates_files_none(self) -> None:
+        """Default last_candidates_files is None."""
+        state = CombinerState()
+        assert state.last_candidates_files is None
 
 
 class TestCombinerStateValues:
@@ -78,6 +88,12 @@ class TestCombinerStateValues:
         state = CombinerState()
         state.syllables = 4
         assert state.syllables == 4
+
+    def test_set_syllable_mode_all(self) -> None:
+        """Can set syllable_mode to all."""
+        state = CombinerState()
+        state.syllable_mode = "all"
+        assert state.syllable_mode == "all"
 
     def test_set_count(self) -> None:
         """Can set count to various values."""
@@ -117,6 +133,11 @@ class TestCombinerStateCliMapping:
         state = CombinerState(syllables=3)
         assert state.syllables == 3
 
+    def test_syllable_mode_is_tui_only(self) -> None:
+        """syllable_mode is a TUI-only option and defaults to exact."""
+        state = CombinerState()
+        assert state.syllable_mode == "exact"
+
     def test_maps_to_cli_count(self) -> None:
         """count maps to --count."""
         state = CombinerState(count=5000)
@@ -148,6 +169,13 @@ class TestCombinerStateTyping:
         for count in [2, 3, 4]:
             state = CombinerState(syllables=count)
             assert state.syllables == count
+
+    def test_syllable_mode_accepts_exact_or_all(self) -> None:
+        """syllable_mode should accept 'exact' or 'all'."""
+        state_exact = CombinerState(syllable_mode="exact")
+        state_all = CombinerState(syllable_mode="all")
+        assert state_exact.syllable_mode == "exact"
+        assert state_all.syllable_mode == "all"
 
     def test_frequency_weight_accepts_range(self) -> None:
         """frequency_weight should accept values 0.0 to 1.0."""
@@ -203,6 +231,11 @@ class TestSelectorStateDefaults:
         state = SelectorState()
         assert state.count == 100
 
+    def test_default_count_mode(self) -> None:
+        """Default count_mode is manual."""
+        state = SelectorState()
+        assert state.count_mode == "manual"
+
     def test_default_mode(self) -> None:
         """Default mode is 'hard' (matches CLI --mode default)."""
         state = SelectorState()
@@ -232,6 +265,12 @@ class TestSelectorStateValues:
         state = SelectorState()
         state.name_class = "last_name"
         assert state.name_class == "last_name"
+
+    def test_set_count_mode_unique(self) -> None:
+        """Can set count_mode to unique."""
+        state = SelectorState()
+        state.count_mode = "unique"
+        assert state.count_mode == "unique"
 
     def test_set_name_class_place_name(self) -> None:
         """Can set name_class to place_name."""

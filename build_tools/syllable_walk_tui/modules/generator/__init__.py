@@ -7,6 +7,7 @@ build tools. It mirrors the exact CLI options as UI controls.
 Combiner CLI Options → TUI Controls:
     --run-dir          → Uses currently loaded patch's corpus_dir
     --syllables        → Syllables selector (2/3/4)
+    TUI extra          → Syllable mode (exact or all 2-4)
     --count            → Count spinner (default: 10000)
     --seed             → Seed input (None = random)
     --frequency-weight → Frequency weight slider (0.0-1.0)
