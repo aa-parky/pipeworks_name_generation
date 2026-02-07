@@ -379,6 +379,16 @@ def test_get_misc_routes_and_unknown(tmp_path: Path) -> None:
     assert "generation-class-grid-collapsed" in root_html
     assert 'id="api-builder-queue"' in root_html
     assert 'id="api-builder-combined"' in root_html
+    assert 'id="api-builder-param-count"' in root_html
+    assert 'id="api-builder-param-seed"' in root_html
+    assert 'id="api-builder-param-format"' in root_html
+    assert 'id="api-builder-param-unique"' in root_html
+    assert 'id="api-builder-param-summary"' in root_html
+    assert 'id="api-builder-generate-preview-btn"' in root_html
+    assert 'id="api-builder-inline-preview"' in root_html
+    assert 'id="api-builder-combo-preview"' in root_html
+    assert 'id="api-builder-copy-btn"' in root_html
+    assert 'id="api-builder-copy-status"' in root_html
     assert 'id="api-builder-preview"' in root_html
 
     favicon = _HandlerHarness(path="/favicon.ico", db_path=db_path)
