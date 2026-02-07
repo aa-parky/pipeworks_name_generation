@@ -1,4 +1,4 @@
-"""Tests for web app configuration loading and override behavior."""
+"""Tests for webapp configuration loading and runtime override behavior."""
 
 from __future__ import annotations
 
@@ -7,63 +7,95 @@ from pathlib import Path
 import pytest
 
 from pipeworks_name_generation.webapp.config import (
+    DEFAULT_DB_PATH,
+    DEFAULT_HOST,
     ServerSettings,
+    _coerce_port,
     apply_runtime_overrides,
     load_server_settings,
 )
 
 
+def test_coerce_port_handles_blank_and_none() -> None:
+    """Blank port values should be treated as auto-port (``None``)."""
+    assert _coerce_port(None) is None
+    assert _coerce_port("") is None
+    assert _coerce_port("   ") is None
+
+
+def test_coerce_port_rejects_invalid_values() -> None:
+    """Invalid textual or out-of-range ports should raise ``ValueError``."""
+    with pytest.raises(ValueError):
+        _coerce_port("abc")
+    with pytest.raises(ValueError):
+        _coerce_port("1023")
+    with pytest.raises(ValueError):
+        _coerce_port("70000")
+
+
 def test_load_server_settings_defaults_when_file_missing(tmp_path: Path) -> None:
-    """Missing config file should produce default settings."""
-    settings = load_server_settings(tmp_path / "missing.ini")
-    assert settings.host == "127.0.0.1"
+    """Missing config file should return default server settings."""
+    missing = tmp_path / "does-not-exist.ini"
+    settings = load_server_settings(missing)
+
+    assert settings.host == DEFAULT_HOST
     assert settings.port is None
-    assert settings.db_path == Path("pipeworks_name_generation.sqlite3")
+    assert settings.db_path == DEFAULT_DB_PATH
     assert settings.verbose is True
 
 
-def test_load_server_settings_from_ini(tmp_path: Path) -> None:
-    """INI values should be parsed and returned in settings object."""
-    config_path = tmp_path / "server.ini"
-    config_path.write_text(
-        "[server]\n"
-        "host = 0.0.0.0\n"
-        "port = 8123\n"
-        "db_path = /tmp/custom.sqlite3\n"
-        "verbose = false\n",
+def test_load_server_settings_reads_server_section(tmp_path: Path) -> None:
+    """INI values in ``[server]`` should be parsed into ``ServerSettings``."""
+    ini_path = tmp_path / "server.ini"
+    ini_path.write_text(
+        "\n".join(
+            [
+                "[server]",
+                "host = 0.0.0.0",
+                "port = 8111",
+                "db_path = ~/pipeworks/test.sqlite3",
+                "verbose = false",
+            ]
+        ),
         encoding="utf-8",
     )
 
-    settings = load_server_settings(config_path)
-
+    settings = load_server_settings(ini_path)
     assert settings.host == "0.0.0.0"
-    assert settings.port == 8123
-    assert settings.db_path == Path("/tmp/custom.sqlite3")
+    assert settings.port == 8111
+    assert settings.db_path == Path("~/pipeworks/test.sqlite3").expanduser()
     assert settings.verbose is False
 
 
-def test_load_server_settings_invalid_port_raises(tmp_path: Path) -> None:
-    """Invalid configured ports should raise a clear ValueError."""
-    config_path = tmp_path / "server.ini"
-    config_path.write_text("[server]\nport = not-a-port\n", encoding="utf-8")
+def test_apply_runtime_overrides_updates_selected_fields(tmp_path: Path) -> None:
+    """CLI-style overrides should replace only the values that are provided."""
+    base = ServerSettings()
+    db_override = tmp_path / "db.sqlite3"
 
-    with pytest.raises(ValueError, match="Invalid port value"):
-        load_server_settings(config_path)
-
-
-def test_apply_runtime_overrides() -> None:
-    """CLI/runtime overrides should take precedence over base settings."""
-    base = ServerSettings(host="127.0.0.1", port=None, db_path=Path("db.sqlite3"), verbose=True)
-
-    result = apply_runtime_overrides(
+    updated = apply_runtime_overrides(
         base,
-        host="0.0.0.0",
-        port=9001,
-        db_path=Path("override.sqlite3"),
+        host="127.0.0.2",
+        port=8123,
+        db_path=db_override,
         verbose=False,
     )
 
-    assert result.host == "0.0.0.0"
-    assert result.port == 9001
-    assert result.db_path == Path("override.sqlite3")
-    assert result.verbose is False
+    assert updated.host == "127.0.0.2"
+    assert updated.port == 8123
+    assert updated.db_path == db_override
+    assert updated.verbose is False
+
+
+def test_apply_runtime_overrides_keeps_defaults_when_none() -> None:
+    """``None`` overrides should preserve existing values."""
+    base = ServerSettings(host="127.0.0.1", port=8010, db_path=Path("x.sqlite3"), verbose=True)
+
+    updated = apply_runtime_overrides(
+        base,
+        host=None,
+        port=None,
+        db_path=None,
+        verbose=None,
+    )
+
+    assert updated == base

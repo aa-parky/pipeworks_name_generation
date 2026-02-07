@@ -1,184 +1,240 @@
-"""Unit tests for webapp server routing and port resolution."""
+"""Tests for the minimal Pipeworks webapp server and API helpers."""
 
 from __future__ import annotations
 
 import io
 import json
-from contextlib import nullcontext
+import zipfile
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from typing import Any
 
 import pytest
 
-from pipeworks_name_generation.webapp.config import ServerSettings
-from pipeworks_name_generation.webapp.importer import ImportResult
 from pipeworks_name_generation.webapp.server import (
-    HTML_TEMPLATE,
     WebAppHandler,
-    find_available_port,
-    resolve_server_port,
-    start_http_server,
+    _connect_database,
+    _fetch_text_rows,
+    _get_package_table,
+    _import_package_pair,
+    _initialize_schema,
+    _list_package_tables,
+    _list_packages,
+    _quote_identifier,
+    _slugify_identifier,
+    create_handler_class,
 )
 
 
-def _build_handler(path: str) -> MagicMock:
-    """Build a mocked handler instance with bound methods for direct route testing."""
-    handler = MagicMock(spec=WebAppHandler)
-    handler.path = path
-    handler.headers = {}
-    handler.rfile = io.BytesIO()
-    handler.wfile = io.BytesIO()
-    handler.db_path = Path("/tmp/test.sqlite3")
-    handler.verbose = False
+def _build_sample_package_pair(tmp_path: Path) -> tuple[Path, Path]:
+    """Create a realistic metadata+zip test pair with two ``*.txt`` files."""
+    metadata_path = tmp_path / "goblin_flower-latin_selections_metadata.json"
+    zip_path = tmp_path / "goblin_flower-latin_selections.zip"
 
-    handler._send_text = MagicMock()
-    handler._send_json = MagicMock()
-    handler.send_error = MagicMock()
+    payload = {
+        "common_name": "Goblin Flower Latin",
+        "files_included": [
+            "nltk_first_name_2syl.txt",
+            "nltk_last_name_2syl.txt",
+            "nltk_first_name_2syl.json",
+        ],
+    }
+    metadata_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    handler.do_GET = WebAppHandler.do_GET.__get__(handler, WebAppHandler)
-    handler.do_POST = WebAppHandler.do_POST.__get__(handler, WebAppHandler)
-    return handler
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("selections/nltk_first_name_2syl.txt", "alfa\n\nbeta\ngamma\n")
+        archive.writestr("selections/nltk_last_name_2syl.txt", "thorn\nbriar\n")
+        archive.writestr("selections/nltk_first_name_2syl.json", '{"ignored": true}')
 
-
-def test_find_available_port_returns_first_free_port() -> None:
-    """Port finder should return the first bindable port in range."""
-    with patch(
-        "pipeworks_name_generation.webapp.server._port_is_available",
-        side_effect=[False, True],
-    ):
-        assert find_available_port(start=8000, end=8001) == 8001
+    return metadata_path, zip_path
 
 
-def test_find_available_port_raises_when_exhausted() -> None:
-    """Port finder should raise when all tested ports are occupied."""
-    with patch("pipeworks_name_generation.webapp.server._port_is_available", return_value=False):
-        with pytest.raises(OSError, match="No free ports available"):
-            find_available_port(start=8000, end=8001)
+class _HandlerHarness:
+    """Small in-process harness for route testing without opening sockets."""
+
+    def __init__(self, *, path: str, db_path: Path, body: dict[str, Any] | None = None) -> None:
+        payload = b""
+        if body is not None:
+            payload = json.dumps(body).encode("utf-8")
+
+        self.path = path
+        self.db_path = db_path
+        self.verbose = False
+        self.headers = {"Content-Length": str(len(payload))}
+        self.rfile = io.BytesIO(payload)
+        self.wfile = io.BytesIO()
+        self.response_status = 0
+        self.response_headers: dict[str, str] = {}
+        self.error_status: int | None = None
+        self.error_message: str | None = None
+
+        # Bind handler methods directly so route logic executes unchanged.
+        self._send_text = WebAppHandler._send_text.__get__(self, WebAppHandler)
+        self._send_json = WebAppHandler._send_json.__get__(self, WebAppHandler)
+        self._read_json_body = WebAppHandler._read_json_body.__get__(self, WebAppHandler)
+        self._handle_import = WebAppHandler._handle_import.__get__(self, WebAppHandler)
+        self._handle_generation = WebAppHandler._handle_generation.__get__(self, WebAppHandler)
+        self.do_GET = WebAppHandler.do_GET.__get__(self, WebAppHandler)
+        self.do_POST = WebAppHandler.do_POST.__get__(self, WebAppHandler)
+
+    def send_response(self, status: int) -> None:
+        """Store HTTP status code sent by handler logic."""
+        self.response_status = status
+
+    def send_header(self, name: str, value: str) -> None:
+        """Capture response headers for assertions when needed."""
+        self.response_headers[name] = value
+
+    def end_headers(self) -> None:
+        """Mirror BaseHTTPRequestHandler API; no-op for harness."""
+
+    def send_error(self, code: int, message: str | None = None) -> None:
+        """Capture error responses emitted by unknown-route handling."""
+        self.error_status = code
+        self.error_message = message
+
+    def json_body(self) -> dict[str, Any]:
+        """Decode written response body as JSON."""
+        self.wfile.seek(0)
+        payload = self.wfile.read().decode("utf-8")
+        return json.loads(payload) if payload else {}
 
 
-def test_resolve_server_port_manual_and_auto_modes() -> None:
-    """Manual configured ports should be validated; auto mode should call scanner."""
-    with patch("pipeworks_name_generation.webapp.server._port_is_available", return_value=True):
-        assert resolve_server_port("127.0.0.1", 8123) == 8123
-
-    with patch("pipeworks_name_generation.webapp.server._port_is_available", return_value=False):
-        with pytest.raises(OSError, match="already in use"):
-            resolve_server_port("127.0.0.1", 8123)
-
-    with patch("pipeworks_name_generation.webapp.server.find_available_port", return_value=8010):
-        assert resolve_server_port("127.0.0.1", None) == 8010
+def test_slugify_identifier_normalizes_input() -> None:
+    """Slugify should normalize punctuation, empties, and leading digits."""
+    assert _slugify_identifier("Goblin Flower Latin", max_length=24) == "goblin_flower_latin"
+    assert _slugify_identifier("%%%###", max_length=24) == "item"
+    assert _slugify_identifier("123_name", max_length=24).startswith("n_")
 
 
-def test_start_http_server_initializes_schema_and_constructs_server() -> None:
-    """Server startup should initialize DB schema and build HTTPServer with resolved port."""
-    settings = ServerSettings(
-        host="127.0.0.1", port=None, db_path=Path("db.sqlite3"), verbose=False
-    )
-
-    fake_conn = SimpleNamespace()
-    with (
-        patch(
-            "pipeworks_name_generation.webapp.server.connect_database",
-            return_value=nullcontext(fake_conn),
-        ) as connect_mock,
-        patch("pipeworks_name_generation.webapp.server.initialize_schema") as init_mock,
-        patch("pipeworks_name_generation.webapp.server.resolve_server_port", return_value=8099),
-        patch("pipeworks_name_generation.webapp.server.HTTPServer") as http_server_mock,
-    ):
-        server, port = start_http_server(settings)
-
-    connect_mock.assert_called_once_with(settings.db_path)
-    init_mock.assert_called_once_with(fake_conn)
-    http_server_mock.assert_called_once()
-    assert server == http_server_mock.return_value
-    assert port == 8099
+def test_quote_identifier_rejects_unsafe_name() -> None:
+    """SQL identifier quoting should reject non-identifier characters."""
+    with pytest.raises(ValueError):
+        _quote_identifier("drop table x;")
 
 
-def test_do_get_root_and_health_routes() -> None:
-    """GET / and GET /api/health should dispatch expected responses."""
-    root_handler = _build_handler("/")
-    root_handler.do_GET()
-    root_handler._send_text.assert_called_once_with(HTML_TEMPLATE, content_type="text/html")
+def test_import_package_pair_populates_schema_and_rows(tmp_path: Path) -> None:
+    """Importer should create one SQLite table per listed txt file."""
+    db_path = tmp_path / "webapp.sqlite3"
+    metadata_path, zip_path = _build_sample_package_pair(tmp_path)
 
-    health_handler = _build_handler("/api/health")
-    health_handler.do_GET()
-    health_handler._send_json.assert_called_once_with({"ok": True})
+    with _connect_database(db_path) as conn:
+        _initialize_schema(conn)
+        result = _import_package_pair(conn, metadata_path=metadata_path, zip_path=zip_path)
 
+        assert result["package_name"] == "Goblin Flower Latin"
+        assert len(result["tables"]) == 2
 
-def test_do_get_imports_route_lists_rows() -> None:
-    """GET /api/imports should return list payload from DB layer."""
-    handler = _build_handler("/api/imports")
-    fake_conn = SimpleNamespace()
+        packages = _list_packages(conn)
+        assert len(packages) == 1
+        package_id = packages[0]["id"]
 
-    with (
-        patch(
-            "pipeworks_name_generation.webapp.server.connect_database",
-            return_value=nullcontext(fake_conn),
-        ),
-        patch("pipeworks_name_generation.webapp.server.initialize_schema") as init_mock,
-        patch(
-            "pipeworks_name_generation.webapp.server.list_imported_packages",
-            return_value=[{"id": 1, "common_name": "demo"}],
-        ) as list_mock,
-    ):
-        handler.do_GET()
-
-    init_mock.assert_called_once_with(fake_conn)
-    list_mock.assert_called_once_with(fake_conn)
-    handler._send_json.assert_called_once_with({"imports": [{"id": 1, "common_name": "demo"}]})
-
-
-def test_do_post_import_validation_errors() -> None:
-    """POST /api/import should reject invalid body/payload states."""
-    # Invalid JSON payload
-    invalid_json = _build_handler("/api/import")
-    invalid_json.headers = {"Content-Length": "9"}
-    invalid_json.rfile = io.BytesIO(b"{bad json")
-    invalid_json.do_POST()
-    invalid_json._send_json.assert_called_once_with(
-        {"error": "Request body must be valid JSON."},
-        status=400,
-    )
-
-    # Missing required keys
-    missing_fields = _build_handler("/api/import")
-    body = json.dumps({}).encode("utf-8")
-    missing_fields.headers = {"Content-Length": str(len(body))}
-    missing_fields.rfile = io.BytesIO(body)
-    missing_fields.do_POST()
-    missing_fields._send_json.assert_called_once_with(
-        {"error": "Both 'metadata_json_path' and 'package_zip_path' are required."},
-        status=400,
-    )
-
-
-def test_do_post_import_success_path() -> None:
-    """POST /api/import should call importer and return success payload."""
-    handler = _build_handler("/api/import")
-
-    body = json.dumps(
-        {
-            "metadata_json_path": "/tmp/meta.json",
-            "package_zip_path": "/tmp/pkg.zip",
+        tables = _list_package_tables(conn, package_id)
+        assert len(tables) == 2
+        assert {table["source_txt_name"] for table in tables} == {
+            "nltk_first_name_2syl.txt",
+            "nltk_last_name_2syl.txt",
         }
-    ).encode("utf-8")
-    handler.headers = {"Content-Length": str(len(body))}
-    handler.rfile = io.BytesIO(body)
 
-    fake_conn = SimpleNamespace()
-    with (
-        patch(
-            "pipeworks_name_generation.webapp.server.connect_database",
-            return_value=nullcontext(fake_conn),
-        ),
-        patch("pipeworks_name_generation.webapp.server.initialize_schema"),
-        patch(
-            "pipeworks_name_generation.webapp.server.import_package_pair",
-            return_value=ImportResult(package_id=7, message="ok"),
-        ) as import_mock,
-    ):
-        handler.do_POST()
+        first_table = tables[0]
+        meta = _get_package_table(conn, int(first_table["id"]))
+        assert meta is not None
+        rows = _fetch_text_rows(conn, str(meta["table_name"]), offset=0, limit=20)
+        assert rows
+        assert all("value" in row for row in rows)
 
-    import_mock.assert_called_once()
-    handler._send_json.assert_called_once_with({"success": True, "package_id": 7, "message": "ok"})
+
+def test_import_package_pair_rejects_duplicate_pair(tmp_path: Path) -> None:
+    """Importing the same metadata+zip pair twice should fail cleanly."""
+    db_path = tmp_path / "webapp.sqlite3"
+    metadata_path, zip_path = _build_sample_package_pair(tmp_path)
+
+    with _connect_database(db_path) as conn:
+        _initialize_schema(conn)
+        _import_package_pair(conn, metadata_path=metadata_path, zip_path=zip_path)
+
+        with pytest.raises(ValueError, match="already been imported"):
+            _import_package_pair(conn, metadata_path=metadata_path, zip_path=zip_path)
+
+
+def test_import_package_pair_rejects_invalid_files_included_type(tmp_path: Path) -> None:
+    """Metadata ``files_included`` must be list when provided."""
+    db_path = tmp_path / "webapp.sqlite3"
+    metadata_path = tmp_path / "bad_metadata.json"
+    zip_path = tmp_path / "ok.zip"
+    metadata_path.write_text(
+        json.dumps({"common_name": "Invalid", "files_included": "nltk_first_name_2syl.txt"}),
+        encoding="utf-8",
+    )
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("selections/nltk_first_name_2syl.txt", "alfa\n")
+
+    with _connect_database(db_path) as conn:
+        _initialize_schema(conn)
+        with pytest.raises(ValueError, match="files_included"):
+            _import_package_pair(conn, metadata_path=metadata_path, zip_path=zip_path)
+
+
+def test_api_endpoints_import_and_browse_rows(tmp_path: Path) -> None:
+    """End-to-end API flow should import package and expose rows via routes."""
+    metadata_path, zip_path = _build_sample_package_pair(tmp_path)
+    db_path = tmp_path / "webapi.sqlite3"
+
+    health = _HandlerHarness(path="/api/health", db_path=db_path)
+    health.do_GET()
+    assert health.response_status == 200
+    assert health.json_body()["ok"] is True
+
+    importer = _HandlerHarness(
+        path="/api/import",
+        db_path=db_path,
+        body={
+            "metadata_json_path": str(metadata_path),
+            "package_zip_path": str(zip_path),
+        },
+    )
+    importer.do_POST()
+    import_payload = importer.json_body()
+    assert importer.response_status == 200
+    assert import_payload["package_name"] == "Goblin Flower Latin"
+    assert len(import_payload["tables"]) == 2
+
+    packages = _HandlerHarness(path="/api/database/packages", db_path=db_path)
+    packages.do_GET()
+    packages_payload = packages.json_body()
+    assert packages.response_status == 200
+    assert packages_payload["packages"]
+    package_id = int(packages_payload["packages"][0]["id"])
+
+    tables = _HandlerHarness(
+        path=f"/api/database/package-tables?package_id={package_id}",
+        db_path=db_path,
+    )
+    tables.do_GET()
+    tables_payload = tables.json_body()
+    assert tables.response_status == 200
+    assert tables_payload["tables"]
+    table_id = int(tables_payload["tables"][0]["id"])
+
+    rows = _HandlerHarness(
+        path=f"/api/database/table-rows?table_id={table_id}&offset=0&limit=20",
+        db_path=db_path,
+    )
+    rows.do_GET()
+    rows_payload = rows.json_body()
+    assert rows.response_status == 200
+    assert rows_payload["rows"]
+    assert rows_payload["limit"] == 20
+
+    missing = _HandlerHarness(path="/api/database/table-rows", db_path=db_path)
+    missing.do_GET()
+    missing_payload = missing.json_body()
+    assert missing.response_status == 400
+    assert "table_id" in missing_payload["error"]
+
+
+def test_create_handler_class_binds_runtime_values(tmp_path: Path) -> None:
+    """Bound handler class should reflect runtime ``verbose`` and ``db_path``."""
+    db_path = tmp_path / "bound.sqlite3"
+    bound = create_handler_class(verbose=False, db_path=db_path)
+    assert bound.verbose is False
+    assert bound.db_path == db_path

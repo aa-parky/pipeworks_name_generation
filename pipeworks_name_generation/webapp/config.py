@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_DB_PATH = Path("pipeworks_name_generation.sqlite3")
+DEFAULT_DB_PATH = Path("pipeworks_name_generation/data/name_packages.sqlite3")
 
 
 @dataclass(frozen=True)
