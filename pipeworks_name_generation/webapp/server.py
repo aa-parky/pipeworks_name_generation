@@ -232,6 +232,12 @@ HTML_TEMPLATE = """<!doctype html>
       gap: 0.8rem;
       width: 100%;
     }
+    .api-builder-left-column {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 0.8rem;
+      min-height: 280px;
+    }
     .api-builder-pane {
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -244,6 +250,75 @@ HTML_TEMPLATE = """<!doctype html>
       font-size: 0.88rem;
       letter-spacing: 0.01em;
     }
+    .api-builder-param-grid {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 0.45rem;
+      align-items: center;
+    }
+    .api-builder-param-grid label {
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+    .api-builder-checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      margin-top: 0.45rem;
+      margin-bottom: 0.45rem;
+    }
+    .api-builder-checkbox-row input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+    }
+    #api-builder-param-summary {
+      margin: 0.5rem 0 0 0;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    #api-builder-generate-preview-btn {
+      margin-top: 0.5rem;
+    }
+    #api-builder-inline-preview {
+      margin: 0.55rem 0 0 0;
+      padding: 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel-2) 72%, black 28%);
+      font-size: 0.8rem;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--muted);
+      max-height: 150px;
+      overflow: auto;
+    }
+    .api-builder-inline-preview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 0.55rem;
+      margin-top: 0.55rem;
+    }
+    .api-builder-inline-preview-card h5 {
+      margin: 0 0 0.35rem 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+      letter-spacing: 0.01em;
+    }
+    #api-builder-combo-preview {
+      margin: 0;
+      padding: 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel-2) 72%, black 28%);
+      font-size: 0.8rem;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--muted);
+      max-height: 150px;
+      overflow: auto;
+    }
     #api-builder-queue {
       margin: 0;
       padding-left: 1.1rem;
@@ -251,6 +326,11 @@ HTML_TEMPLATE = """<!doctype html>
     #api-builder-combined {
       margin: 0.6rem 0 0 0;
       font-size: 0.84rem;
+      color: var(--muted);
+    }
+    #api-builder-copy-status {
+      margin: 0.45rem 0 0.35rem 0;
+      font-size: 0.82rem;
       color: var(--muted);
     }
     #api-builder-preview {
@@ -301,6 +381,9 @@ HTML_TEMPLATE = """<!doctype html>
     @media (max-width: 640px) {
       .generation-class-grid { grid-template-columns: 1fr; }
       .api-builder-layout { grid-template-columns: 1fr; }
+      .api-builder-left-column { grid-template-rows: auto auto; min-height: 0; }
+      .api-builder-param-grid { grid-template-columns: 1fr; }
+      .api-builder-inline-preview-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -416,13 +499,59 @@ HTML_TEMPLATE = """<!doctype html>
         <article class="generation-card generation-placeholder generation-card-full-width">
           <h3>API Builder</h3>
           <div class="api-builder-layout">
-            <section class="api-builder-pane">
-              <h4>Selected Inputs</h4>
-              <ul id="api-builder-queue"></ul>
-              <p id="api-builder-combined">Combined unique combinations: 0</p>
+            <section class="api-builder-left-column">
+              <section class="api-builder-pane">
+                <h4>Selected Inputs</h4>
+                <ul id="api-builder-queue"></ul>
+                <p id="api-builder-combined">Combined unique combinations: 0</p>
+              </section>
+              <section class="api-builder-pane">
+                <h4>Request Parameters</h4>
+                <div class="api-builder-param-grid">
+                  <label for="api-builder-param-count">Number of Generations</label>
+                  <input
+                    id="api-builder-param-count"
+                    type="number"
+                    min="1"
+                    max="100000"
+                    value="100"
+                  />
+                </div>
+                <div class="api-builder-param-grid">
+                  <label for="api-builder-param-seed">Seed (optional)</label>
+                  <input id="api-builder-param-seed" type="number" placeholder="blank = random" />
+                </div>
+                <div class="api-builder-param-grid">
+                  <label for="api-builder-param-format">Output Format</label>
+                  <select id="api-builder-param-format">
+                    <option value="json">json</option>
+                    <option value="txt">txt</option>
+                  </select>
+                </div>
+                <div class="api-builder-checkbox-row">
+                  <input id="api-builder-param-unique" type="checkbox" />
+                  <label for="api-builder-param-unique">Unique only</label>
+                </div>
+                <button type="button" id="api-builder-generate-preview-btn">Generate Preview</button>
+                <p id="api-builder-param-summary">
+                  Set request defaults used by the query/payload preview.
+                </p>
+                <div class="api-builder-inline-preview-grid">
+                  <section class="api-builder-inline-preview-card">
+                    <h5>Generated Names Preview</h5>
+                    <p id="api-builder-inline-preview">No preview generated yet.</p>
+                  </section>
+                  <section class="api-builder-inline-preview-card">
+                    <h5>First + Last Combinations</h5>
+                    <p id="api-builder-combo-preview">No combination preview generated yet.</p>
+                  </section>
+                </div>
+              </section>
             </section>
             <section class="api-builder-pane">
               <h4>Builder Preview</h4>
+              <button type="button" id="api-builder-copy-btn">Copy Query Text</button>
+              <p id="api-builder-copy-status">No query content yet.</p>
               <p id="api-builder-preview">No selections queued yet.</p>
             </section>
           </div>
@@ -664,10 +793,50 @@ HTML_TEMPLATE = """<!doctype html>
       note.textContent = `Loaded ${syllableOptions.length} syllable option(s).`;
     }
 
+    // Read and normalize user-supplied API Builder request defaults so the
+    // preview and copyable snippets use one canonical parameter snapshot.
+    function readApiBuilderParams() {
+      const countInput = document.getElementById('api-builder-param-count');
+      const seedInput = document.getElementById('api-builder-param-seed');
+      const formatSelect = document.getElementById('api-builder-param-format');
+      const uniqueCheckbox = document.getElementById('api-builder-param-unique');
+      const summary = document.getElementById('api-builder-param-summary');
+
+      const rawCount = Number(countInput.value || '0');
+      const generationCount = Number.isFinite(rawCount)
+        ? Math.min(100000, Math.max(1, Math.trunc(rawCount)))
+        : 100;
+      countInput.value = String(generationCount);
+
+      let seed = null;
+      if (seedInput.value.trim()) {
+        const rawSeed = Number(seedInput.value);
+        if (Number.isFinite(rawSeed)) {
+          seed = Math.trunc(rawSeed);
+        }
+      }
+      const outputFormat = formatSelect.value || 'json';
+      const uniqueOnly = Boolean(uniqueCheckbox.checked);
+
+      const seedText = seed === null ? 'random' : String(seed);
+      summary.textContent = `Count ${generationCount}, seed ${seedText}, format ${outputFormat}, unique ${uniqueOnly}`;
+
+      return {
+        generation_count: generationCount,
+        seed: seed,
+        output_format: outputFormat,
+        unique_only: uniqueOnly,
+      };
+    }
+
+    // Render API Builder queue, combined unique estimate, and copyable query
+    // snippets from current selections + parameter defaults.
     function renderApiBuilder() {
       const queue = document.getElementById('api-builder-queue');
       const preview = document.getElementById('api-builder-preview');
       const combined = document.getElementById('api-builder-combined');
+      const copyStatus = document.getElementById('api-builder-copy-status');
+      const requestParams = readApiBuilderParams();
       queue.innerHTML = '';
 
       if (!apiBuilderSelections.length) {
@@ -676,6 +845,8 @@ HTML_TEMPLATE = """<!doctype html>
         li.textContent = 'No selections queued.';
         queue.appendChild(li);
         combined.textContent = 'Combined unique combinations: 0';
+        copyStatus.className = 'muted';
+        copyStatus.textContent = 'No query content yet.';
         preview.textContent = 'No selections queued yet.';
         return;
       }
@@ -695,7 +866,169 @@ HTML_TEMPLATE = """<!doctype html>
 
       const combinedDisplay = String(combinedUnique).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
       combined.textContent = `Combined unique combinations: ${combinedDisplay}`;
-      preview.textContent = JSON.stringify(apiBuilderSelections, null, 2);
+      const previewLines = [
+        '# Pipeworks API Builder Output',
+        '# Selection stats query commands',
+        `# Defaults: count=${requestParams.generation_count}, seed=${requestParams.seed === null ? 'random' : requestParams.seed}, format=${requestParams.output_format}, unique_only=${requestParams.unique_only}`,
+      ];
+      for (const item of apiBuilderSelections) {
+        const query = new URLSearchParams({
+          class_key: item.class_key,
+          package_id: String(item.package_id),
+          syllable_key: item.syllable_key,
+        });
+        previewLines.push('');
+        previewLines.push(`# ${item.class_label} (${item.syllable_label})`);
+        previewLines.push(
+          `curl -s "${window.location.origin}/api/generation/selection-stats?${query.toString()}"`
+        );
+        const generatePayload = {
+          class_key: item.class_key,
+          package_id: item.package_id,
+          syllable_key: item.syllable_key,
+          generation_count: requestParams.generation_count,
+          output_format: requestParams.output_format,
+          unique_only: requestParams.unique_only,
+        };
+        if (requestParams.seed !== null) {
+          generatePayload.seed = requestParams.seed;
+        }
+        previewLines.push('POST /api/generate payload:');
+        previewLines.push(JSON.stringify(generatePayload));
+      }
+      previewLines.push('');
+      previewLines.push(`# Combined unique combinations estimate: ${combinedDisplay}`);
+      previewLines.push('# Structured selection payload');
+      previewLines.push(
+        JSON.stringify(
+          apiBuilderSelections.map((item) => ({
+            class_key: item.class_key,
+            package_id: item.package_id,
+            syllable_key: item.syllable_key,
+            generation_count: requestParams.generation_count,
+            seed: requestParams.seed,
+            output_format: requestParams.output_format,
+            unique_only: requestParams.unique_only,
+            max_items: item.max_items,
+            max_unique_combinations: item.max_unique_combinations,
+          })),
+          null,
+          2
+        )
+      );
+      copyStatus.className = 'muted';
+      copyStatus.textContent = 'Preview ready. Use copy button for programmatic use.';
+      preview.textContent = previewLines.join('\\n');
+    }
+
+    // Copy the full builder preview text (query snippets + payload examples)
+    // into the clipboard so it can be pasted into scripts or terminals.
+    async function copyApiBuilderPreview() {
+      const preview = document.getElementById('api-builder-preview');
+      const copyStatus = document.getElementById('api-builder-copy-status');
+      const text = String(preview.textContent || '').trim();
+      if (!text || text === 'No selections queued yet.') {
+        copyStatus.className = 'err';
+        copyStatus.textContent = 'Nothing to copy yet. Queue at least one selection.';
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(text);
+        copyStatus.className = 'ok';
+        copyStatus.textContent = 'Copied query text to clipboard.';
+      } catch (_error) {
+        copyStatus.className = 'err';
+        copyStatus.textContent = 'Clipboard unavailable. Copy directly from preview text.';
+      }
+    }
+
+    // Generate a quick inline sample preview using the current queued
+    // selections. This calls the placeholder /api/generate endpoint and also
+    // derives First x Last Cartesian combinations when both classes exist.
+    async function generateApiBuilderInlinePreview() {
+      const inlinePreview = document.getElementById('api-builder-inline-preview');
+      const comboPreview = document.getElementById('api-builder-combo-preview');
+      const params = readApiBuilderParams();
+      if (!apiBuilderSelections.length) {
+        inlinePreview.className = 'err';
+        inlinePreview.textContent = 'Queue at least one selection before generating preview.';
+        comboPreview.className = 'muted';
+        comboPreview.textContent =
+          'Need at least one First Name and one Last Name selection to build combinations.';
+        return;
+      }
+
+      // The current placeholder generate endpoint clamps count to 20.
+      const requestedCount = params.generation_count;
+      const previewCount = Math.min(20, requestedCount);
+      inlinePreview.className = 'muted';
+      inlinePreview.textContent = `Generating preview (${previewCount} per selection)...`;
+      comboPreview.className = 'muted';
+      comboPreview.textContent = 'Building First + Last combinations from preview data...';
+
+      const outputLines = [];
+      const namesByClass = {};
+      for (const item of apiBuilderSelections) {
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name_class: item.class_key,
+            count: previewCount,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          inlinePreview.className = 'err';
+          inlinePreview.textContent = data.error || 'Failed to generate preview.';
+          comboPreview.className = 'err';
+          comboPreview.textContent = 'Combination preview skipped because generation failed.';
+          return;
+        }
+
+        const generatedNames = (data.names || []).map((value) => String(value));
+        if (!namesByClass[item.class_key]) {
+          namesByClass[item.class_key] = [];
+        }
+        namesByClass[item.class_key].push(...generatedNames);
+
+        outputLines.push(`${item.class_label} [${item.syllable_label}]`);
+        outputLines.push(generatedNames.join(', '));
+        outputLines.push('');
+      }
+
+      if (requestedCount > previewCount) {
+        outputLines.push(
+          `Note: requested ${requestedCount}, preview capped at ${previewCount} by current API endpoint.`
+        );
+      }
+
+      inlinePreview.className = 'ok';
+      inlinePreview.textContent = outputLines.join('\\n').trim() || 'No preview data returned.';
+
+      // Build a de-duplicated First x Last preview matrix from the generated
+      // sample output. This provides a quick human check for blend scale.
+      const firstNames = Array.from(new Set((namesByClass.first_name || []).filter(Boolean)));
+      const lastNames = Array.from(new Set((namesByClass.last_name || []).filter(Boolean)));
+      if (!firstNames.length || !lastNames.length) {
+        comboPreview.className = 'muted';
+        comboPreview.textContent =
+          'Need at least one First Name and one Last Name selection to build combinations.';
+        return;
+      }
+
+      const combinationLines = [
+        `Total combinations: ${firstNames.length * lastNames.length} (${firstNames.length} x ${lastNames.length})`,
+        '',
+      ];
+      for (const firstName of firstNames) {
+        for (const lastName of lastNames) {
+          combinationLines.push(`${firstName} ${lastName}`);
+        }
+      }
+      comboPreview.className = 'ok';
+      comboPreview.textContent = combinationLines.join('\\n');
     }
 
     async function sendToApiBuilder(classKey) {
@@ -984,6 +1317,23 @@ HTML_TEMPLATE = """<!doctype html>
     });
     document.getElementById('db-prev-btn').addEventListener('click', pagePrev);
     document.getElementById('db-next-btn').addEventListener('click', pageNext);
+    document.getElementById('api-builder-copy-btn').addEventListener('click', () => {
+      void copyApiBuilderPreview();
+    });
+    document.getElementById('api-builder-generate-preview-btn').addEventListener('click', () => {
+      void generateApiBuilderInlinePreview();
+    });
+    const apiParamIds = [
+      'api-builder-param-count',
+      'api-builder-param-seed',
+      'api-builder-param-format',
+      'api-builder-param-unique',
+    ];
+    for (const paramId of apiParamIds) {
+      const element = document.getElementById(paramId);
+      element.addEventListener('input', renderApiBuilder);
+      element.addEventListener('change', renderApiBuilder);
+    }
 
     loadPackages();
     loadGenerationPackageOptions();
@@ -1058,6 +1408,19 @@ class WebAppHandler(BaseHTTPRequestHandler):
     - ``GET /api/database/table-rows``: Paginated rows for one table
     - ``POST /api/import``: Import metadata+zip package pair
     - ``POST /api/generate``: Return placeholder generated names
+
+    Endpoint contract notes:
+
+    - ``GET /api/generation/package-syllables`` expects ``class_key`` and
+      ``package_id`` query parameters.
+    - ``GET /api/generation/selection-stats`` expects ``class_key``,
+      ``package_id``, and ``syllable_key`` query parameters and returns:
+      ``max_items`` and ``max_unique_combinations``.
+    - ``POST /api/import`` expects JSON keys:
+      ``metadata_json_path`` and ``package_zip_path``.
+    - ``POST /api/generate`` currently implements deterministic placeholder
+      generation for UI preview workflows. It intentionally does not yet query
+      imported SQLite package tables.
 
     Class attributes ``verbose`` and ``db_path`` are injected at startup by
     :func:`create_handler_class`, which allows one handler implementation to be
@@ -1345,12 +1708,26 @@ class WebAppHandler(BaseHTTPRequestHandler):
             self._send_json({"error": f"Import failed: {exc}"}, status=500)
 
     def _handle_generation(self) -> None:
-        """Generate a deterministic placeholder list for the Generation tab.
+        """Generate deterministic placeholder names for Generation tab previews.
 
-        Expected JSON payload keys:
+        Current API behavior is intentionally simple and stable while the
+        database-backed generation contract is still being designed.
 
-        - ``name_class``: Logical class label (for deterministic variation)
-        - ``count``: Requested output size (clamped to ``1..20``)
+        Accepted JSON payload keys:
+
+        - ``name_class``: Logical class label used as deterministic hash input.
+        - ``count``: Requested output size, clamped to ``1..20``.
+
+        Response body:
+
+        - ``message``: Human-readable summary.
+        - ``names``: Deterministic placeholder list.
+
+        Notes:
+
+        - Optional fields often present in builder previews (for example
+          ``seed``/``unique_only``/``output_format``) are currently ignored by
+          this endpoint implementation.
         """
         try:
             payload = self._read_json_body()
@@ -1377,7 +1754,19 @@ class WebAppHandler(BaseHTTPRequestHandler):
 
 
 def _generate_placeholder_names(name_class: str, count: int) -> list[str]:
-    """Generate deterministic placeholder names for the Generation tab."""
+    """Generate deterministic placeholder names for the Generation tab.
+
+    The output is intentionally hash-based (``sha256``) rather than RNG-based
+    so repeated requests with the same ``name_class`` and ``count`` yield
+    stable output without mutating global random state.
+
+    Args:
+        name_class: Logical class key used as deterministic hash seed text.
+        count: Number of placeholder names to emit.
+
+    Returns:
+        List of generated placeholder names.
+    """
     names: list[str] = []
     for index in range(count):
         # Use a stable hash per position to keep output deterministic without
