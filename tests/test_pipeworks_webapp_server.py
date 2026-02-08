@@ -378,6 +378,7 @@ def test_get_misc_routes_and_unknown(tmp_path: Path) -> None:
     assert 'id="generation-class-card-section"' in root_html
     assert "generation-class-grid-collapsed" in root_html
     assert 'id="api-builder-queue"' in root_html
+    assert 'id="api-builder-clear-btn"' in root_html
     assert 'id="api-builder-combined"' in root_html
     assert 'id="api-builder-param-count"' in root_html
     assert 'id="api-builder-param-seed"' in root_html
@@ -520,18 +521,47 @@ def test_table_rows_not_found_returns_404(tmp_path: Path) -> None:
 
 
 def test_post_generate_and_unknown_routes(tmp_path: Path) -> None:
-    """POST dispatcher should route generation and unknown paths correctly."""
+    """POST dispatcher should route SQLite generation and unknown paths correctly."""
     db_path = tmp_path / "db.sqlite3"
+    metadata_path, zip_path = _build_sample_package_pair(tmp_path)
+
+    importer = _HandlerHarness(
+        path="/api/import",
+        db_path=db_path,
+        body={
+            "metadata_json_path": str(metadata_path),
+            "package_zip_path": str(zip_path),
+        },
+    )
+    importer.do_POST()
+    import_payload = importer.json_body()
+    assert importer.response_status == 200
+    package_id = int(import_payload["package_id"])
 
     gen = _HandlerHarness(
         path="/api/generate",
         db_path=db_path,
-        body={"name_class": "first_name", "count": 3},
+        body={
+            "class_key": "first_name",
+            "package_id": package_id,
+            "syllable_key": "2syl",
+            "generation_count": 3,
+            "unique_only": True,
+            "seed": 7,
+            "output_format": "txt",
+        },
     )
     gen.do_POST()
     payload = gen.json_body()
     assert gen.response_status == 200
+    assert payload["source"] == "sqlite"
+    assert payload["class_key"] == "first_name"
+    assert payload["generation_count"] == 3
+    assert payload["unique_only"] is True
+    assert payload["output_format"] == "txt"
+    assert "text" in payload
     assert len(payload["names"]) == 3
+    assert set(payload["names"]).issubset({"alfa", "beta", "gamma"})
 
     unknown = _HandlerHarness(path="/api/nope", db_path=db_path, body={})
     unknown.do_POST()
@@ -582,21 +612,31 @@ def test_handle_import_validation_and_exception_paths(
 
 
 def test_handle_generation_validation_paths(tmp_path: Path) -> None:
-    """Generation route should reject invalid body and non-integer count values."""
+    """Generation route should reject missing scope fields and invalid values."""
     db_path = tmp_path / "db.sqlite3"
 
     empty = _HandlerHarness(path="/api/generate", db_path=db_path)
     empty.do_POST()
     assert empty.response_status == 400
 
+    missing_scope = _HandlerHarness(path="/api/generate", db_path=db_path, body={})
+    missing_scope.do_POST()
+    assert missing_scope.response_status == 400
+    assert "class_key" in missing_scope.json_body()["error"]
+
     invalid_count = _HandlerHarness(
         path="/api/generate",
         db_path=db_path,
-        body={"name_class": "last_name", "count": "abc"},
+        body={
+            "class_key": "last_name",
+            "package_id": 1,
+            "syllable_key": "2syl",
+            "generation_count": "abc",
+        },
     )
     invalid_count.do_POST()
     assert invalid_count.response_status == 400
-    assert "must be an integer" in invalid_count.json_body()["error"]
+    assert "generation_count" in invalid_count.json_body()["error"]
 
 
 def test_import_package_pair_other_error_paths(
