@@ -35,9 +35,10 @@ from pipeworks_name_generation.webapp.generation import (
     _coerce_output_format,
     _collect_generation_source_values,
     _get_generation_selection_stats,
-    _list_generation_package_options,
     _list_generation_syllable_options,
     _sample_generation_values,
+    clear_generation_package_options_cache,
+    get_cached_generation_package_options,
 )
 from pipeworks_name_generation.webapp.http import _parse_optional_int, _parse_required_int
 from pipeworks_name_generation.webapp.routes import database as database_routes
@@ -76,11 +77,15 @@ def get_health(handler: Any, _query: dict[str, list[str]]) -> None:
 
 def get_generation_package_options(handler: Any, _query: dict[str, list[str]]) -> None:
     """Return package options grouped by generation class."""
+
+    def _list_generation_package_options_cached(conn: Any) -> list[dict[str, Any]]:
+        return get_cached_generation_package_options(conn, db_path=handler.db_path)
+
     generation_routes.get_package_options(
         handler,
         connect_database=_connect_database,
         initialize_schema=handler._ensure_schema,
-        list_generation_package_options=_list_generation_package_options,
+        list_generation_package_options=_list_generation_package_options_cached,
     )
 
 
@@ -158,6 +163,7 @@ def post_import(handler: Any) -> None:
         connect_database=_connect_database,
         initialize_schema=handler._ensure_schema,
         import_package_pair=_import_package_pair,
+        on_import_success=lambda: clear_generation_package_options_cache(handler.db_path),
     )
 
 

@@ -447,6 +447,45 @@ def _list_generation_package_options(conn: sqlite3.Connection) -> list[dict[str,
     return result
 
 
+_PACKAGE_OPTIONS_CACHE: dict[str, list[dict[str, Any]]] = {}
+
+
+def get_cached_generation_package_options(
+    conn: sqlite3.Connection, *, db_path: Path
+) -> list[dict[str, Any]]:
+    """Return cached generation package options for one database path.
+
+    Args:
+        conn: Open SQLite connection to the target database.
+        db_path: Filesystem path of the SQLite database.
+
+    Returns:
+        Cached or freshly computed package option payload.
+    """
+    cache_key = str(db_path.expanduser().resolve())
+    cached = _PACKAGE_OPTIONS_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    payload = _list_generation_package_options(conn)
+    _PACKAGE_OPTIONS_CACHE[cache_key] = payload
+    return payload
+
+
+def clear_generation_package_options_cache(db_path: Path | None = None) -> None:
+    """Clear cached generation package options for one DB or all DBs.
+
+    Args:
+        db_path: Optional database path. When omitted, clears all cache entries.
+    """
+    if db_path is None:
+        _PACKAGE_OPTIONS_CACHE.clear()
+        return
+
+    cache_key = str(db_path.expanduser().resolve())
+    _PACKAGE_OPTIONS_CACHE.pop(cache_key, None)
+
+
 __all__ = [
     "_coerce_generation_count",
     "_coerce_optional_seed",
@@ -464,4 +503,6 @@ __all__ = [
     "_count_distinct_values_across_tables",
     "_get_generation_selection_stats",
     "_list_generation_package_options",
+    "get_cached_generation_package_options",
+    "clear_generation_package_options_cache",
 ]

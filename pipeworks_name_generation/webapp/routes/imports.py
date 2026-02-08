@@ -22,6 +22,7 @@ def post_import(
     connect_database: Callable[..., Any],
     initialize_schema: Callable[..., None],
     import_package_pair: Callable[..., dict[str, Any]],
+    on_import_success: Callable[[], None] | None = None,
 ) -> None:
     """Import one metadata+zip pair and create tables for included txt data."""
     try:
@@ -46,6 +47,8 @@ def post_import(
         with connect_database(handler.db_path) as conn:
             initialize_schema(conn)
             result = import_package_pair(conn, metadata_path=metadata_path, zip_path=zip_path)
+        if on_import_success is not None:
+            on_import_success()
         handler._send_json(result)
     except (FileNotFoundError, ValueError) as exc:
         handler._send_json({"error": str(exc)}, status=400)
