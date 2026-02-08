@@ -14,7 +14,12 @@ import pipeworks_name_generation.webapp.server as server_module
 from pipeworks_name_generation.webapp.config import ServerSettings
 from pipeworks_name_generation.webapp.server import (
     WebAppHandler,
+    _coerce_bool,
+    _coerce_generation_count,
     _coerce_int,
+    _coerce_optional_seed,
+    _coerce_output_format,
+    _collect_generation_source_values,
     _connect_database,
     _extract_syllable_option_from_source_txt_name,
     _fetch_text_rows,
@@ -34,7 +39,9 @@ from pipeworks_name_generation.webapp.server import (
     _port_is_available,
     _quote_identifier,
     _read_txt_rows,
+    _sample_generation_values,
     _slugify_identifier,
+    _syllable_option_sort_key,
     build_settings_from_args,
     create_argument_parser,
     create_handler_class,
@@ -378,6 +385,7 @@ def test_get_misc_routes_and_unknown(tmp_path: Path) -> None:
     assert 'id="generation-class-card-section"' in root_html
     assert "generation-class-grid-collapsed" in root_html
     assert 'id="api-builder-queue"' in root_html
+    assert 'id="api-builder-clear-btn"' in root_html
     assert 'id="api-builder-combined"' in root_html
     assert 'id="api-builder-param-count"' in root_html
     assert 'id="api-builder-param-seed"' in root_html
@@ -520,18 +528,64 @@ def test_table_rows_not_found_returns_404(tmp_path: Path) -> None:
 
 
 def test_post_generate_and_unknown_routes(tmp_path: Path) -> None:
-    """POST dispatcher should route generation and unknown paths correctly."""
+    """POST dispatcher should route SQLite generation and unknown paths correctly."""
     db_path = tmp_path / "db.sqlite3"
+    metadata_path, zip_path = _build_sample_package_pair(tmp_path)
+
+    importer = _HandlerHarness(
+        path="/api/import",
+        db_path=db_path,
+        body={
+            "metadata_json_path": str(metadata_path),
+            "package_zip_path": str(zip_path),
+        },
+    )
+    importer.do_POST()
+    import_payload = importer.json_body()
+    assert importer.response_status == 200
+    package_id = int(import_payload["package_id"])
 
     gen = _HandlerHarness(
         path="/api/generate",
         db_path=db_path,
-        body={"name_class": "first_name", "count": 3},
+        body={
+            "class_key": "first_name",
+            "package_id": package_id,
+            "syllable_key": "2syl",
+            "generation_count": 3,
+            "unique_only": True,
+            "seed": 7,
+            "output_format": "txt",
+        },
     )
     gen.do_POST()
     payload = gen.json_body()
     assert gen.response_status == 200
+    assert payload["source"] == "sqlite"
+    assert payload["class_key"] == "first_name"
+    assert payload["generation_count"] == 3
+    assert payload["unique_only"] is True
+    assert payload["output_format"] == "txt"
+    assert "text" in payload
     assert len(payload["names"]) == 3
+    assert set(payload["names"]).issubset({"alfa", "beta", "gamma"})
+
+    gen_no_seed = _HandlerHarness(
+        path="/api/generate",
+        db_path=db_path,
+        body={
+            "class_key": "first_name",
+            "package_id": package_id,
+            "syllable_key": "2syl",
+            "generation_count": 2,
+        },
+    )
+    gen_no_seed.do_POST()
+    payload_no_seed = gen_no_seed.json_body()
+    assert gen_no_seed.response_status == 200
+    assert payload_no_seed["output_format"] == "json"
+    assert "seed" not in payload_no_seed
+    assert "text" not in payload_no_seed
 
     unknown = _HandlerHarness(path="/api/nope", db_path=db_path, body={})
     unknown.do_POST()
@@ -543,6 +597,10 @@ def test_handle_import_validation_and_exception_paths(
 ) -> None:
     """Import route should cover payload validation and failure branches."""
     db_path = tmp_path / "db.sqlite3"
+
+    no_body = _HandlerHarness(path="/api/import", db_path=db_path)
+    no_body.do_POST()
+    assert no_body.response_status == 400
 
     # Missing required fields.
     missing = _HandlerHarness(path="/api/import", db_path=db_path, body={})
@@ -582,21 +640,98 @@ def test_handle_import_validation_and_exception_paths(
 
 
 def test_handle_generation_validation_paths(tmp_path: Path) -> None:
-    """Generation route should reject invalid body and non-integer count values."""
+    """Generation route should reject missing scope fields and invalid values."""
     db_path = tmp_path / "db.sqlite3"
 
     empty = _HandlerHarness(path="/api/generate", db_path=db_path)
     empty.do_POST()
     assert empty.response_status == 400
 
+    missing_scope = _HandlerHarness(path="/api/generate", db_path=db_path, body={})
+    missing_scope.do_POST()
+    assert missing_scope.response_status == 400
+    assert "class_key" in missing_scope.json_body()["error"]
+
     invalid_count = _HandlerHarness(
         path="/api/generate",
         db_path=db_path,
-        body={"name_class": "last_name", "count": "abc"},
+        body={
+            "class_key": "last_name",
+            "package_id": 1,
+            "syllable_key": "2syl",
+            "generation_count": "abc",
+        },
     )
     invalid_count.do_POST()
     assert invalid_count.response_status == 400
-    assert "must be an integer" in invalid_count.json_body()["error"]
+    assert "generation_count" in invalid_count.json_body()["error"]
+
+    missing_package = _HandlerHarness(
+        path="/api/generate",
+        db_path=db_path,
+        body={"class_key": "first_name", "syllable_key": "2syl"},
+    )
+    missing_package.do_POST()
+    assert missing_package.response_status == 400
+    assert "package_id" in missing_package.json_body()["error"]
+
+    missing_syllable = _HandlerHarness(
+        path="/api/generate",
+        db_path=db_path,
+        body={"class_key": "first_name", "package_id": 1},
+    )
+    missing_syllable.do_POST()
+    assert missing_syllable.response_status == 400
+    assert "syllable_key" in missing_syllable.json_body()["error"]
+
+    non_int_package = _HandlerHarness(
+        path="/api/generate",
+        db_path=db_path,
+        body={"class_key": "first_name", "package_id": "abc", "syllable_key": "2syl"},
+    )
+    non_int_package.do_POST()
+    assert non_int_package.response_status == 400
+    assert "must be an integer" in non_int_package.json_body()["error"]
+
+    bad_package_range = _HandlerHarness(
+        path="/api/generate",
+        db_path=db_path,
+        body={"class_key": "first_name", "package_id": 0, "syllable_key": "2syl"},
+    )
+    bad_package_range.do_POST()
+    assert bad_package_range.response_status == 400
+    assert "must be >= 1" in bad_package_range.json_body()["error"]
+
+
+def test_generate_route_handles_value_and_runtime_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Generate route should map validation/runtime failures to 400/500 responses."""
+    db_path = tmp_path / "db.sqlite3"
+    with _connect_database(db_path) as conn:
+        _initialize_schema(conn)
+
+    no_matches = _HandlerHarness(
+        path="/api/generate",
+        db_path=db_path,
+        body={"class_key": "first_name", "package_id": 1, "syllable_key": "2syl"},
+    )
+    no_matches.do_POST()
+    assert no_matches.response_status == 400
+    assert "No imported tables match" in no_matches.json_body()["error"]
+
+    def fail_collect(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(server_module, "_collect_generation_source_values", fail_collect)
+    runtime_fail = _HandlerHarness(
+        path="/api/generate",
+        db_path=db_path,
+        body={"class_key": "first_name", "package_id": 1, "syllable_key": "2syl"},
+    )
+    runtime_fail.do_POST()
+    assert runtime_fail.response_status == 500
+    assert "Generation failed" in runtime_fail.json_body()["error"]
 
 
 def test_import_package_pair_other_error_paths(
@@ -677,11 +812,21 @@ def test_list_generation_package_options_grouped_by_class(tmp_path: Path) -> Non
 
     with _connect_database(db_path) as conn:
         _initialize_schema(conn)
-        _import_package_pair(conn, metadata_path=metadata_path, zip_path=zip_path)
+        imported = _import_package_pair(conn, metadata_path=metadata_path, zip_path=zip_path)
+        package_id = int(imported["package_id"])
+        conn.execute(
+            """
+            INSERT INTO package_tables (package_id, source_txt_name, table_name, row_count)
+            VALUES (?, ?, ?, ?)
+            """,
+            (package_id, "nltk_first_name_3syl.txt", "extra_t1", 5),
+        )
+        conn.commit()
         grouped = _list_generation_package_options(conn)
 
     grouped_map = {entry["key"]: entry["packages"] for entry in grouped}
     assert grouped_map["first_name"]
+    assert len(grouped_map["first_name"][0]["source_txt_names"]) >= 2
     assert grouped_map["last_name"]
     assert grouped_map["place_name"] == []
     assert grouped_map["location_name"] == []
@@ -720,6 +865,7 @@ def test_list_generation_syllable_options_for_package_class(tmp_path: Path) -> N
                 (package_id, "nltk_first_name_all.txt", "t3", 10),
                 (package_id, "nltk_last_name_3syl.txt", "t4", 10),
                 (package_id, "nltk_first_name_2syl_alt.txt", "t5", 10),
+                (package_id, "nltk_first_name_sample.txt", "t6", 10),
             ],
         )
         conn.commit()
@@ -737,6 +883,11 @@ def test_list_generation_syllable_options_for_package_class(tmp_path: Path) -> N
         {"key": "all", "label": "All syllables"},
     ]
     assert last_name_options == [{"key": "3syl", "label": "3 syllables"}]
+
+
+def test_syllable_option_sort_key_unknown_value_branch() -> None:
+    """Unknown syllable keys should fall through to tertiary sort bucket."""
+    assert _syllable_option_sort_key("banana") == (2, 9999, "banana")
 
 
 def test_list_generation_syllable_options_rejects_unknown_class(tmp_path: Path) -> None:
@@ -865,6 +1016,87 @@ def test_integer_parsing_helpers_cover_default_and_bounds() -> None:
         _coerce_int("0", key="table_id", minimum=1)
     with pytest.raises(ValueError, match="<= 5"):
         _coerce_int("6", key="limit", maximum=5)
+
+
+def test_generation_payload_coercion_helpers_cover_bounds_and_invalids() -> None:
+    """Generation coercion helpers should validate full request parameter surface."""
+    assert _coerce_generation_count("3") == 3
+    with pytest.raises(ValueError, match=">= 1"):
+        _coerce_generation_count(0)
+    with pytest.raises(ValueError, match="<= 100000"):
+        _coerce_generation_count(100001)
+
+    assert _coerce_optional_seed(None) is None
+    assert _coerce_optional_seed("   ") is None
+    assert _coerce_optional_seed("12") == 12
+    with pytest.raises(ValueError, match="seed"):
+        _coerce_optional_seed("bad")
+
+    assert _coerce_bool(True) is True
+    assert _coerce_bool(0) is False
+    assert _coerce_bool("on") is True
+    assert _coerce_bool("off") is False
+    with pytest.raises(ValueError, match="unique_only"):
+        _coerce_bool("maybe")
+
+    assert _coerce_output_format("json") == "json"
+    assert _coerce_output_format("TXT") == "txt"
+    with pytest.raises(ValueError, match="output_format"):
+        _coerce_output_format("xml")
+
+
+def test_generation_source_collection_and_sampling_helper_paths(tmp_path: Path) -> None:
+    """Generation helpers should cover no-candidate and sampling edge branches."""
+    with _connect_database(tmp_path / "db.sqlite3") as conn:
+        _initialize_schema(conn)
+        imported = conn.execute(
+            """
+            INSERT INTO imported_packages (
+                package_name, imported_at, metadata_json_path, package_zip_path
+            ) VALUES (?, ?, ?, ?)
+            """,
+            ("Helper Package", "2026-02-07T00:00:00+00:00", "/tmp/meta.json", "/tmp/pkg.zip"),
+        )
+        if imported.lastrowid is None:
+            raise AssertionError("Expected sqlite row id for imported package insert.")
+        package_id = int(imported.lastrowid)
+
+        conn.execute(
+            """
+            INSERT INTO package_tables (package_id, source_txt_name, table_name, row_count)
+            VALUES (?, ?, ?, ?)
+            """,
+            (package_id, "nltk_first_name_2syl.txt", "helper_t1", 2),
+        )
+        conn.execute("""
+            CREATE TABLE helper_t1 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                line_number INTEGER NOT NULL,
+                value TEXT NOT NULL
+            )
+            """)
+        # Intentionally blank/space-only values to exercise no-candidates guard.
+        conn.executemany(
+            "INSERT INTO helper_t1 (line_number, value) VALUES (?, ?)",
+            [(1, " "), (2, "")],
+        )
+        conn.commit()
+
+        with pytest.raises(ValueError, match="No candidate values found"):
+            _collect_generation_source_values(
+                conn,
+                class_key="first_name",
+                package_id=package_id,
+                syllable_key="2syl",
+            )
+
+    assert _sample_generation_values([], count=3, seed=None, unique_only=False) == []
+    assert _sample_generation_values([], count=3, seed=None, unique_only=True) == []
+
+    sampled_unique = _sample_generation_values(
+        ["alfa", "beta", "beta"], count=10, seed=7, unique_only=True
+    )
+    assert sorted(sampled_unique) == ["alfa", "beta"]
 
 
 def test_port_discovery_and_resolution_paths(monkeypatch: pytest.MonkeyPatch) -> None:

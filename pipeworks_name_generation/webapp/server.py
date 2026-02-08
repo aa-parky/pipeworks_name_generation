@@ -8,8 +8,8 @@ for now, per current requirements.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import random
 import re
 import socket
 import sqlite3
@@ -503,6 +503,9 @@ HTML_TEMPLATE = """<!doctype html>
               <section class="api-builder-pane">
                 <h4>Selected Inputs</h4>
                 <ul id="api-builder-queue"></ul>
+                <div class="row-buttons">
+                  <button type="button" id="api-builder-clear-btn">Clear Builder</button>
+                </div>
                 <p id="api-builder-combined">Combined unique combinations: 0</p>
               </section>
               <section class="api-builder-pane">
@@ -836,10 +839,12 @@ HTML_TEMPLATE = """<!doctype html>
       const preview = document.getElementById('api-builder-preview');
       const combined = document.getElementById('api-builder-combined');
       const copyStatus = document.getElementById('api-builder-copy-status');
+      const clearButton = document.getElementById('api-builder-clear-btn');
       const requestParams = readApiBuilderParams();
       queue.innerHTML = '';
 
       if (!apiBuilderSelections.length) {
+        clearButton.disabled = true;
         const li = document.createElement('li');
         li.className = 'muted';
         li.textContent = 'No selections queued.';
@@ -850,6 +855,7 @@ HTML_TEMPLATE = """<!doctype html>
         preview.textContent = 'No selections queued yet.';
         return;
       }
+      clearButton.disabled = false;
 
       // Use BigInt to avoid overflow when selections from multiple classes are multiplied.
       let combinedUnique = 1n;
@@ -944,7 +950,7 @@ HTML_TEMPLATE = """<!doctype html>
     }
 
     // Generate a quick inline sample preview using the current queued
-    // selections. This calls the placeholder /api/generate endpoint and also
+    // selections. This calls the SQLite-backed /api/generate endpoint and also
     // derives First x Last Cartesian combinations when both classes exist.
     async function generateApiBuilderInlinePreview() {
       const inlinePreview = document.getElementById('api-builder-inline-preview');
@@ -959,7 +965,7 @@ HTML_TEMPLATE = """<!doctype html>
         return;
       }
 
-      // The current placeholder generate endpoint clamps count to 20.
+      // Keep preview output bounded for UI readability.
       const requestedCount = params.generation_count;
       const previewCount = Math.min(20, requestedCount);
       inlinePreview.className = 'muted';
@@ -970,13 +976,22 @@ HTML_TEMPLATE = """<!doctype html>
       const outputLines = [];
       const namesByClass = {};
       for (const item of apiBuilderSelections) {
+        const generatePayload = {
+          class_key: item.class_key,
+          package_id: item.package_id,
+          syllable_key: item.syllable_key,
+          generation_count: previewCount,
+          unique_only: params.unique_only,
+          output_format: params.output_format,
+        };
+        if (params.seed !== null) {
+          generatePayload.seed = params.seed;
+        }
+
         const response = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name_class: item.class_key,
-            count: previewCount,
-          }),
+          body: JSON.stringify(generatePayload),
         });
         const data = await response.json();
         if (!response.ok) {
@@ -1000,7 +1015,7 @@ HTML_TEMPLATE = """<!doctype html>
 
       if (requestedCount > previewCount) {
         outputLines.push(
-          `Note: requested ${requestedCount}, preview capped at ${previewCount} by current API endpoint.`
+          `Note: requested ${requestedCount}, UI preview capped at ${previewCount} for readability.`
         );
       }
 
@@ -1029,6 +1044,19 @@ HTML_TEMPLATE = """<!doctype html>
       }
       comboPreview.className = 'ok';
       comboPreview.textContent = combinationLines.join('\\n');
+    }
+
+    // Clear API Builder queued selections and reset inline previews so users
+    // can quickly start a fresh query composition session.
+    function clearApiBuilder() {
+      apiBuilderSelections.length = 0;
+      const inlinePreview = document.getElementById('api-builder-inline-preview');
+      const comboPreview = document.getElementById('api-builder-combo-preview');
+      inlinePreview.className = 'muted';
+      inlinePreview.textContent = 'No preview generated yet.';
+      comboPreview.className = 'muted';
+      comboPreview.textContent = 'No combination preview generated yet.';
+      renderApiBuilder();
     }
 
     async function sendToApiBuilder(classKey) {
@@ -1320,6 +1348,7 @@ HTML_TEMPLATE = """<!doctype html>
     document.getElementById('api-builder-copy-btn').addEventListener('click', () => {
       void copyApiBuilderPreview();
     });
+    document.getElementById('api-builder-clear-btn').addEventListener('click', clearApiBuilder);
     document.getElementById('api-builder-generate-preview-btn').addEventListener('click', () => {
       void generateApiBuilderInlinePreview();
     });
@@ -1343,21 +1372,6 @@ HTML_TEMPLATE = """<!doctype html>
 </body>
 </html>
 """
-
-SAMPLE_SYLLABLES = [
-    "zor",
-    "mok",
-    "dra",
-    "ven",
-    "tal",
-    "rik",
-    "sul",
-    "nor",
-    "kai",
-    "bel",
-    "esh",
-    "grim",
-]
 
 # Canonical class keys and labels used by the Generation tab card layout.
 GENERATION_NAME_CLASSES: list[tuple[str, str]] = [
@@ -1407,7 +1421,7 @@ class WebAppHandler(BaseHTTPRequestHandler):
     - ``GET /api/database/package-tables``: Table list for one package
     - ``GET /api/database/table-rows``: Paginated rows for one table
     - ``POST /api/import``: Import metadata+zip package pair
-    - ``POST /api/generate``: Return placeholder generated names
+    - ``POST /api/generate``: Generate names from imported SQLite tables
 
     Endpoint contract notes:
 
@@ -1418,9 +1432,8 @@ class WebAppHandler(BaseHTTPRequestHandler):
       ``max_items`` and ``max_unique_combinations``.
     - ``POST /api/import`` expects JSON keys:
       ``metadata_json_path`` and ``package_zip_path``.
-    - ``POST /api/generate`` currently implements deterministic placeholder
-      generation for UI preview workflows. It intentionally does not yet query
-      imported SQLite package tables.
+    - ``POST /api/generate`` requires ``class_key``, ``package_id``, and
+      ``syllable_key`` plus optional generation controls.
 
     Class attributes ``verbose`` and ``db_path`` are injected at startup by
     :func:`create_handler_class`, which allows one handler implementation to be
@@ -1708,26 +1721,18 @@ class WebAppHandler(BaseHTTPRequestHandler):
             self._send_json({"error": f"Import failed: {exc}"}, status=500)
 
     def _handle_generation(self) -> None:
-        """Generate deterministic placeholder names for Generation tab previews.
+        """Generate names from SQLite tables for one selected class scope.
 
-        Current API behavior is intentionally simple and stable while the
-        database-backed generation contract is still being designed.
+        - ``class_key``: Canonical generation class key.
+        - ``package_id``: Imported package id.
+        - ``syllable_key``: Syllable mode key (for example ``2syl``/``all``).
 
-        Accepted JSON payload keys:
+        Optional payload keys:
 
-        - ``name_class``: Logical class label used as deterministic hash input.
-        - ``count``: Requested output size, clamped to ``1..20``.
-
-        Response body:
-
-        - ``message``: Human-readable summary.
-        - ``names``: Deterministic placeholder list.
-
-        Notes:
-
-        - Optional fields often present in builder previews (for example
-          ``seed``/``unique_only``/``output_format``) are currently ignored by
-          this endpoint implementation.
+        - ``generation_count``: Name count request.
+        - ``seed``: Optional deterministic seed for local RNG instance.
+        - ``unique_only``: If true, sample without replacement.
+        - ``output_format``: ``json`` (default) or ``txt``.
         """
         try:
             payload = self._read_json_body()
@@ -1735,50 +1740,188 @@ class WebAppHandler(BaseHTTPRequestHandler):
             self._send_json({"error": str(exc)}, status=400)
             return
 
-        name_class = str(payload.get("name_class", "first_name")).strip() or "first_name"
-        raw_count = payload.get("count", 5)
-        try:
-            count = int(raw_count)
-        except (TypeError, ValueError):
-            self._send_json({"error": "Field 'count' must be an integer."}, status=400)
+        class_key = str(payload.get("class_key", "")).strip()
+        package_id_raw = payload.get("package_id")
+        syllable_key = str(payload.get("syllable_key", "")).strip()
+        if not class_key:
+            self._send_json({"error": "Field 'class_key' is required."}, status=400)
+            return
+        if package_id_raw is None or (
+            isinstance(package_id_raw, str) and not package_id_raw.strip()
+        ):
+            self._send_json({"error": "Field 'package_id' is required."}, status=400)
+            return
+        if not syllable_key:
+            self._send_json({"error": "Field 'syllable_key' is required."}, status=400)
             return
 
-        count = max(1, min(20, count))
-        names = _generate_placeholder_names(name_class, count)
-        self._send_json(
-            {
-                "message": f"Generated {len(names)} placeholder name(s) for {name_class}.",
-                "names": names,
-            }
-        )
+        try:
+            package_id = int(package_id_raw)
+        except (TypeError, ValueError):
+            self._send_json({"error": "Field 'package_id' must be an integer."}, status=400)
+            return
+        if package_id < 1:
+            self._send_json({"error": "Field 'package_id' must be >= 1."}, status=400)
+            return
+
+        try:
+            generation_count = _coerce_generation_count(payload.get("generation_count", 20))
+            seed = _coerce_optional_seed(payload.get("seed"))
+            unique_only = _coerce_bool(payload.get("unique_only", False))
+            output_format = _coerce_output_format(payload.get("output_format", "json"))
+
+            with _connect_database(self.db_path) as conn:
+                _initialize_schema(conn)
+                source_values = _collect_generation_source_values(
+                    conn,
+                    class_key=class_key,
+                    package_id=package_id,
+                    syllable_key=syllable_key,
+                )
+            names = _sample_generation_values(
+                source_values,
+                count=generation_count,
+                seed=seed,
+                unique_only=unique_only,
+            )
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, status=400)
+            return
+        except Exception as exc:  # nosec B110 - converted into controlled API response
+            self._send_json({"error": f"Generation failed: {exc}"}, status=500)
+            return
+
+        response: dict[str, Any] = {
+            "message": f"Generated {len(names)} name(s) from imported package data.",
+            "source": "sqlite",
+            "class_key": class_key,
+            "package_id": package_id,
+            "syllable_key": syllable_key,
+            "generation_count": generation_count,
+            "unique_only": unique_only,
+            "output_format": output_format,
+            "names": names,
+        }
+        if seed is not None:
+            response["seed"] = seed
+        if output_format == "txt":
+            response["text"] = "\n".join(names)
+        self._send_json(response)
 
 
-def _generate_placeholder_names(name_class: str, count: int) -> list[str]:
-    """Generate deterministic placeholder names for the Generation tab.
+def _coerce_generation_count(raw_count: Any) -> int:
+    """Parse and bound requested generation count for SQLite mode."""
+    try:
+        count = int(raw_count)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Field 'generation_count' must be an integer.") from exc
+    if count < 1:
+        raise ValueError("Field 'generation_count' must be >= 1.")
+    if count > 100000:
+        raise ValueError("Field 'generation_count' must be <= 100000.")
+    return count
 
-    The output is intentionally hash-based (``sha256``) rather than RNG-based
-    so repeated requests with the same ``name_class`` and ``count`` yield
-    stable output without mutating global random state.
 
-    Args:
-        name_class: Logical class key used as deterministic hash seed text.
-        count: Number of placeholder names to emit.
+def _coerce_optional_seed(raw_seed: Any) -> int | None:
+    """Parse optional seed value for local RNG-based sampling."""
+    if raw_seed is None:
+        return None
+    if isinstance(raw_seed, str) and not raw_seed.strip():
+        return None
+    try:
+        return int(raw_seed)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Field 'seed' must be an integer when provided.") from exc
 
-    Returns:
-        List of generated placeholder names.
+
+def _coerce_bool(raw_value: Any) -> bool:
+    """Parse loose bool payload values used by UI and API clients."""
+    if isinstance(raw_value, bool):
+        return raw_value
+    if isinstance(raw_value, int):
+        return raw_value != 0
+    if isinstance(raw_value, str):
+        normalized = raw_value.strip().lower()
+        if normalized in {"1", "true", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "off", ""}:
+            return False
+    raise ValueError("Field 'unique_only' must be a boolean-compatible value.")
+
+
+def _coerce_output_format(raw_format: Any) -> str:
+    """Validate output format enum currently supported by the generate route."""
+    normalized = str(raw_format).strip().lower() if raw_format is not None else "json"
+    if normalized not in {"json", "txt"}:
+        raise ValueError("Field 'output_format' must be one of: json, txt.")
+    return normalized
+
+
+def _read_all_values_from_table(conn: sqlite3.Connection, table_name: str) -> list[str]:
+    """Read all values from one imported txt table preserving row order."""
+    quoted = _quote_identifier(table_name)
+    query = f"""
+        SELECT value
+        FROM {quoted}
+        ORDER BY line_number, id
+        """  # nosec B608
+    rows = conn.execute(query).fetchall()
+    return [str(row["value"]) for row in rows]
+
+
+def _collect_generation_source_values(
+    conn: sqlite3.Connection, *, class_key: str, package_id: int, syllable_key: str
+) -> list[str]:
+    """Collect candidate values from SQLite tables matching selection filters.
+
+    Raises:
+        ValueError: For unsupported selection keys or when no matching values
+            exist for the requested selection.
     """
-    names: list[str] = []
-    for index in range(count):
-        # Use a stable hash per position to keep output deterministic without
-        # depending on pseudo-random generators.
-        digest = hashlib.sha256(f"{name_class}:{index}".encode("utf-8")).digest()
-        pieces = 2 + (digest[0] % 2)
-        syllables = [
-            SAMPLE_SYLLABLES[digest[offset] % len(SAMPLE_SYLLABLES)]
-            for offset in range(1, pieces + 1)
-        ]
-        names.append("".join(syllables))
-    return names
+    matching_tables = _list_generation_matching_tables(
+        conn,
+        class_key=class_key,
+        package_id=package_id,
+        syllable_key=syllable_key,
+    )
+    if not matching_tables:
+        raise ValueError("No imported tables match class/package/syllable selection.")
+
+    values: list[str] = []
+    for item in matching_tables:
+        table_name = str(item["table_name"])
+        values.extend(_read_all_values_from_table(conn, table_name))
+
+    # Keep non-empty strings only; importer already trims values but this keeps
+    # generation resilient to unexpected DB contents.
+    normalized_values = [value.strip() for value in values if str(value).strip()]
+    if not normalized_values:
+        raise ValueError("No candidate values found for the selected generation scope.")
+    return normalized_values
+
+
+def _sample_generation_values(
+    values: Sequence[str], *, count: int, seed: int | None, unique_only: bool
+) -> list[str]:
+    """Sample output names from candidate values using a local RNG instance.
+
+    The RNG is per-request so seed usage never mutates global random state.
+    """
+    # Non-cryptographic sampling is intentional for deterministic API behavior.
+    rng = random.Random(seed) if seed is not None else random.Random()  # nosec B311
+    if unique_only:
+        unique_values = list(dict.fromkeys(str(value) for value in values))
+        if not unique_values:
+            return []
+        if count >= len(unique_values):
+            shuffled = unique_values[:]
+            rng.shuffle(shuffled)
+            return shuffled
+        return rng.sample(unique_values, k=count)
+
+    if not values:
+        return []
+    return [str(rng.choice(values)) for _ in range(count)]
 
 
 def _connect_database(db_path: Path) -> sqlite3.Connection:
