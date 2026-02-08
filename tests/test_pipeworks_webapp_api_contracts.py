@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeworks_name_generation.webapp import endpoint_adapters as endpoint_adapters_module
+from pipeworks_name_generation.webapp.generation import get_cached_generation_package_options
 from pipeworks_name_generation.webapp.handler import WebAppHandler
 from pipeworks_name_generation.webapp.http import _parse_optional_int, _parse_required_int
 from pipeworks_name_generation.webapp.routes import database as database_routes
@@ -123,7 +124,9 @@ def test_generation_package_options_contract(tmp_path: Path) -> None:
         handler,
         connect_database=endpoint_adapters_module._connect_database,
         initialize_schema=handler._ensure_schema,
-        list_generation_package_options=endpoint_adapters_module._list_generation_package_options,
+        list_generation_package_options=lambda conn: get_cached_generation_package_options(
+            conn, db_path=handler.db_path
+        ),
     )
 
     payload = handler.json_body()
